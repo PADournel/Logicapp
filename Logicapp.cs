@@ -224,14 +224,36 @@ namespace Logicapp
         {
             var sfi = new Native.SHFILEINFO();
             Native.SHGetFileInfo(path, 0, ref sfi, (uint)Marshal.SizeOf(sfi),
-                0x4000 /*SYSICONINDEX*/ | 0x100 /*ICON*/ | 0x40 /*OVERLAYINDEX*/ | 0x200 /*DISPLAYNAME*/);
+                0x4000 /*SYSICONINDEX*/ | 0x100 /*ICON*/ | 0x800 /*ATTRIBUTES*/ | 0x200 /*DISPLAYNAME*/);
             displayName = sfi.szDisplayName;
             if (sfi.hIcon != IntPtr.Zero) Native.DestroyIcon(sfi.hIcon);
-            int idx = sfi.iIcon & 0xFFFFFF, ov = (sfi.iIcon >> 24) & 0xFF;
+            int idx = sfi.iIcon & 0xFFFFFF;
+            bool isLink = (sfi.dwAttributes & 0x10000 /*SFGAO_LINK*/) != 0;
+            Bitmap r = Load(idx, size);
+            if (r == null) return null;
+            // Flèche des raccourcis : dessinée à la même taille que sur le bureau Windows
+            // (la flèche intégrée aux grandes icônes est beaucoup trop grosse).
+            if (isLink)
+            {
+                Bitmap o = LinkOverlay(OverlaySize(size));
+                if (o != null)
+                    using (var g = Graphics.FromImage(r))
+                    {
+                        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                        g.DrawImage(o, new Rectangle(0, size - o.Height, o.Width, o.Height));
+                    }
+            }
+            return r;
+        }
+
+        // Icône (sans superposition) d'index idx dans la liste système adaptée, mise à la taille voulue.
+        static Bitmap Load(int idx, int size)
+        {
             int shil = size <= 16 ? 1 : size <= 32 ? 0 : size <= 48 ? 2 : 4; // SMALL, LARGE, EXTRALARGE, JUMBO
-            Bitmap b = FromList(shil, idx, ov);
+            Bitmap b = FromList(shil, idx, 0);
             // Pas de vraie version 256 px : Windows renvoie une petite icône dans un coin -> on prend la 48 px.
-            if (b != null && shil == 4 && Extent(b) <= 48) { b.Dispose(); b = FromList(2, idx, ov); }
+            if (b != null && shil == 4 && Extent(b) <= 48) { b.Dispose(); b = FromList(2, idx, 0); }
             if (b == null) return null;
             if (b.Width == size && b.Height == size) return b;
             var r = new Bitmap(size, size, PixelFormat.Format32bppArgb);
@@ -243,6 +265,36 @@ namespace Logicapp
             }
             b.Dispose();
             return r;
+        }
+
+        // Comme l'Explorateur : flèche 16 px pour les petites icônes, 32 px jusqu'à 48 px, puis 2/3 de l'icône.
+        static int OverlaySize(int size) { return size <= 32 ? size : Math.Max(32, size * 2 / 3); }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        struct SHSTOCKICONINFO
+        {
+            public uint cbSize; public IntPtr hIcon; public int iSysImageIndex, iIcon;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szPath;
+        }
+        [DllImport("shell32.dll")]
+        static extern int SHGetStockIconInfo(uint siid, uint flags, ref SHSTOCKICONINFO info);
+
+        static int linkIndex = -2;
+        static readonly Dictionary<int, Bitmap> overlays = new Dictionary<int, Bitmap>();
+
+        static Bitmap LinkOverlay(int size)
+        {
+            Bitmap b;
+            if (overlays.TryGetValue(size, out b)) return b;
+            if (linkIndex == -2)
+            {
+                var info = new SHSTOCKICONINFO();
+                info.cbSize = (uint)Marshal.SizeOf(typeof(SHSTOCKICONINFO));
+                linkIndex = SHGetStockIconInfo(29 /*SIID_LINK*/, 0x4000 /*SHGSI_SYSICONINDEX*/, ref info) == 0 ? info.iSysImageIndex : -1;
+            }
+            b = linkIndex >= 0 ? Load(linkIndex, size) : null;
+            overlays[size] = b;
+            return b;
         }
 
         static Bitmap FromList(int shil, int idx, int ov)
