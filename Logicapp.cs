@@ -377,6 +377,7 @@ namespace Logicapp
         public int BgImageMode = 0;   // 0 Remplir, 1 Ajuster, 2 Étirer, 3 Mosaïque, 4 Centrer
         public int TitleAlign = 0;    // 0 Gauche, 1 Centre, 2 Droite
         public bool LabelShadow = true, ShowCount = true;
+        public int IdleOpacity = 40;  // opacité de toute la zone (%) quand la souris n'est pas dessus
         public string BgImage = "";
         public string LabelFont = "Segoe UI|9|0", TitleFont = "Segoe UI Semibold|9.5|0";
         public Color LabelColor = Color.White;
@@ -398,6 +399,7 @@ namespace Logicapp
             W(sb, "TitleAlign", TitleAlign); W(sb, "ShowCount", ShowCount ? 1 : 0);
             W(sb, "CornerRadius", CornerRadius); W(sb, "BorderWidth", BorderWidth);
             W(sb, "BorderColor", Hex(BorderColor)); W(sb, "BorderAlpha", BorderAlpha);
+            W(sb, "IdleOpacity", IdleOpacity);
         }
 
         public bool Read(string k, string v)
@@ -424,6 +426,7 @@ namespace Logicapp
                 case "BorderWidth": BorderWidth = I(v, BorderWidth, 0, 10); return true;
                 case "BorderColor": BorderColor = C(v, BorderColor); return true;
                 case "BorderAlpha": BorderAlpha = I(v, BorderAlpha, 0, 255); return true;
+                case "IdleOpacity": IdleOpacity = I(v, IdleOpacity, 10, 100); return true;
             }
             return false;
         }
@@ -926,6 +929,11 @@ namespace Logicapp
         string tipText = "";
         SettingsForm settingsForm;
 
+        // Opacité globale (fondu rapide au survol)
+        readonly Timer fadeTimer;
+        int curAlpha = 255;
+        bool renaming;
+
         public ZoneForm(string name, Rectangle bounds, bool collapsed, ZoneStyle style)
         {
             var app = ZoneApp.I;
@@ -949,9 +957,55 @@ namespace Logicapp
             refreshTimer.Tick += delegate { refreshTimer.Stop(); Reload(); };
             peekTimer = new Timer { Interval = 200 };
             peekTimer.Tick += delegate { CheckPeek(); };
+            fadeTimer = new Timer { Interval = 15 };
+            fadeTimer.Tick += delegate { FadeStep(); };
+            menu.Closed += delegate { RefreshMouseInside(); };
+            curAlpha = IdleAlpha;
 
             Reload();
             BuildBgCache();
+        }
+
+        // ---------- Opacité au survol ----------
+
+        int IdleAlpha { get { return (int)Math.Round(Style.IdleOpacity * 2.55); } }
+
+        // La zone est « active » (opacité normale) quand on interagit avec elle.
+        bool IsActive
+        {
+            get
+            {
+                return mouseInside || drag != DragMode.None || dropHover || renaming || menu.Visible ||
+                       (settingsForm != null && !settingsForm.IsDisposed);
+            }
+        }
+
+        public void UpdateFade()
+        {
+            int target = IsActive ? 255 : IdleAlpha;
+            if (target != curAlpha) fadeTimer.Start();
+        }
+
+        void FadeStep()
+        {
+            int target = IsActive ? 255 : IdleAlpha;
+            int step = 36; // ~100-120 ms pour un fondu complet
+            if (Math.Abs(target - curAlpha) <= step) { curAlpha = target; fadeTimer.Stop(); }
+            else curAlpha += target > curAlpha ? step : -step;
+            if (canvas != null && IsHandleCreated) PushLayered(canvas);
+        }
+
+        void RefreshMouseInside()
+        {
+            if (IsDisposed) return;
+            bool inside = Bounds.Contains(Cursor.Position);
+            if (inside != mouseInside)
+            {
+                mouseInside = inside;
+                if (!inside) { hover = -1; hoverGear = false; SetTip(""); }
+                Render();
+            }
+            UpdateFade();
         }
 
         protected override bool ShowWithoutActivation { get { return true; } }
@@ -1000,6 +1054,7 @@ namespace Logicapp
             if (bg) BuildBgCache();
             LayoutItems();
             Render();
+            UpdateFade();
         }
 
         // ---------- Fenêtre ----------
@@ -1447,7 +1502,7 @@ namespace Logicapp
                 old = Native.SelectObject(mem, hb);
                 var size = new Native.SIZE { cx = bmp.Width, cy = bmp.Height };
                 var src = new Native.POINT();
-                var blend = new Native.BLENDFUNCTION { BlendOp = 0, BlendFlags = 0, SourceConstantAlpha = 255, AlphaFormat = 1 };
+                var blend = new Native.BLENDFUNCTION { BlendOp = 0, BlendFlags = 0, SourceConstantAlpha = (byte)curAlpha, AlphaFormat = 1 };
                 Native.UpdateLayeredWindow(Handle, screen, IntPtr.Zero, ref size, mem, ref src, 0, ref blend, 2 /*ULW_ALPHA*/);
             }
             finally
@@ -1573,6 +1628,8 @@ namespace Logicapp
             string path = items[i].FullPath, shown = items[i].Name;
             var box = new RenameBox(shown, labelFont, r);
             box.Committed += delegate (string newName) { RenameItem(path, shown, newName); };
+            box.FormClosed += delegate { renaming = false; RefreshMouseInside(); };
+            renaming = true;
             box.Show();
         }
 
@@ -1619,6 +1676,7 @@ namespace Logicapp
             mouseInside = true;
             if (ZoneApp.I.PeekOnHover) StartPeek();
             Render();
+            UpdateFade();
         }
 
         protected override void OnMouseLeave(EventArgs e)
@@ -1628,6 +1686,7 @@ namespace Logicapp
             mouseInside = false; hover = -1; hoverGear = false;
             SetTip("");
             Render();
+            UpdateFade();
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
@@ -1742,6 +1801,7 @@ namespace Logicapp
                 else if (d == DragMode.Band || d == DragMode.Scroll) Render();
             }
             else if (e.Button == MouseButtons.Right) ShowMenu(e.Y >= titleH && HitItem(e.Location) >= 0);
+            if (!menu.Visible) RefreshMouseInside();
         }
 
         protected override void OnMouseDoubleClick(MouseEventArgs e)
@@ -1786,6 +1846,7 @@ namespace Logicapp
             data.SetFileDropList(sc);
             DoDragDrop(data, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
             QueueReload();
+            RefreshMouseInside();
         }
 
         static DragDropEffects EffectFor(DragEventArgs e)
@@ -1805,6 +1866,7 @@ namespace Logicapp
             StartPeek();
             dropHover = true;
             Render();
+            UpdateFade();
         }
 
         protected override void OnDragOver(DragEventArgs e)
@@ -1818,6 +1880,7 @@ namespace Logicapp
             base.OnDragLeave(e);
             dropHover = false;
             Render();
+            UpdateFade();
         }
 
         protected override void OnDragDrop(DragEventArgs e)
@@ -1832,6 +1895,7 @@ namespace Logicapp
             {
                 ZoneApp.I.MoveInto(files, Folder, copy);
                 Reload();
+                UpdateFade();
             }));
         }
 
@@ -1881,7 +1945,9 @@ namespace Logicapp
         {
             if (settingsForm != null && !settingsForm.IsDisposed) { settingsForm.Activate(); return; }
             settingsForm = new SettingsForm(this);
+            settingsForm.FormClosed += delegate { settingsForm = null; RefreshMouseInside(); };
             settingsForm.Show();
+            UpdateFade();
         }
 
         public bool RenameTo(string n)
@@ -1951,6 +2017,7 @@ namespace Logicapp
         ComboBox cmbMode, cmbAlign;
         FontButton fbTitle, fbLabel;
         CheckBox chkCount, chkShadow;
+        Slider slIdle;
         Label lblInfo;
 
         static int S(int v) { return ZoneApp.I.S(v); }
@@ -1988,6 +2055,9 @@ namespace Logicapp
             Row(t, "Couleur de bordure", cbBorder);
             slBorderAlpha = new Slider(0, 100, Pct);
             Row(t, "Opacité de bordure", slBorderAlpha);
+            slIdle = new Slider(10, 100, Pct);
+            Row(t, "Opacité sans la souris", slIdle);
+            Note(t, "Quand la souris quitte la zone, toute la zone (fond, icônes, textes)\npasse à ce pourcentage de son opacité normale, avec un fondu rapide.\n100 % = pas d'effet.");
 
             // --- Fond ---
             t = NewTab(tabs, "Fond");
@@ -2061,7 +2131,7 @@ namespace Logicapp
             EventHandler changed = delegate { OnChanged(); };
             nuRadius.ValueChanged += changed; nuBorder.ValueChanged += changed;
             foreach (var c in new[] { cbBorder, cbBg, cbTitleText, cbTitleBar, cbLabel }) c.ValueChanged += changed;
-            foreach (var s in new[] { slBorderAlpha, slBgAlpha, slImgAlpha, slTitleAlpha, slIcon, slSpacing }) s.ValueChanged += changed;
+            foreach (var s in new[] { slBorderAlpha, slBgAlpha, slImgAlpha, slTitleAlpha, slIcon, slSpacing, slIdle }) s.ValueChanged += changed;
             cmbMode.SelectedIndexChanged += changed; cmbAlign.SelectedIndexChanged += changed;
             fbTitle.ValueChanged += changed; fbLabel.ValueChanged += changed;
             chkCount.CheckedChanged += changed; chkShadow.CheckedChanged += changed;
@@ -2155,6 +2225,7 @@ namespace Logicapp
             fbLabel.Value = st.LabelFont;
             cbLabel.Value = st.LabelColor;
             chkShadow.Checked = st.LabelShadow;
+            slIdle.Value = st.IdleOpacity;
             loading = false;
         }
 
@@ -2180,6 +2251,7 @@ namespace Logicapp
             st.LabelFont = fbLabel.Value;
             st.LabelColor = cbLabel.Value;
             st.LabelShadow = chkShadow.Checked;
+            st.IdleOpacity = slIdle.Value;
         }
 
         static TableLayoutPanel NewTab(TabControl tabs, string title)

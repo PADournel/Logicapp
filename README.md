@@ -6,6 +6,7 @@ A lightweight Windows 11 app that adds **collapsible zones** to your desktop for
 
 - **Zones on the desktop**: drag icons from the desktop into a zone; drag them out to put them back. Ctrl while dragging copies instead of moving.
 - **Collapsible**: click a zone's title to roll it up to its title bar (with an item count); hover a collapsed zone to peek inside.
+- **Fades when idle**: when the mouse leaves a zone, the whole zone quickly fades to 40% of its normal opacity (adjustable per zone, 100% disables it), and fades back in on hover.
 - **Appearance settings** (gear icon in each title bar), with live preview:
   - zone name, corner radius, border width / color / opacity
   - background color with adjustable opacity, or a background image (fill, fit, stretch, tile, center) with its own opacity
