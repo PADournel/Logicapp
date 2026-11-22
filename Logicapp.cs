@@ -1033,6 +1033,27 @@ namespace Logicapp
         int dibW, dibH;
         readonly Timer animTimer;            // animations RGB (uniquement quand elles sont visibles)
         float animPhase;
+        // Glitch Night City : rafales courtes et aléatoires
+        static readonly Stopwatch Clock = Stopwatch.StartNew();
+        readonly Random glitchRnd = new Random();
+        long glitchUntil, nextGlitch;
+        bool animWasActive;
+        static readonly ImageAttributes GhostMagenta = MakeGhost(true), GhostCyan = MakeGhost(false);
+
+        static ImageAttributes MakeGhost(bool magenta)
+        {
+            var m = new ColorMatrix(new[]
+            {
+                new float[] { magenta ? 1 : 0, 0, 0, 0, 0 },
+                new float[] { 0, magenta ? 0 : 1, 0, 0, 0 },
+                new float[] { 0, 0, 1, 0, 0 },
+                new float[] { 0, 0, 0, 0.5f, 0 },
+                new float[] { 0, 0, 0, 0, 1 }
+            });
+            var ia = new ImageAttributes();
+            ia.SetColorMatrix(m);
+            return ia;
+        }
         string tipText = "";
         SettingsForm settingsForm;
 
@@ -1119,7 +1140,14 @@ namespace Logicapp
         {
             int mode = Style.Theme == 0 ? 0 : Style.RgbAnim;
             bool run = IsHandleCreated && (mode == 2 || (mode == 1 && IsActive));
-            if (!run) { animTimer.Stop(); return; }
+            bool active = IsActive;
+            if (active && !animWasActive && Style.Theme == 2) nextGlitch = Clock.ElapsedMilliseconds; // petit glitch à l'arrivée de la souris
+            animWasActive = active;
+            if (!run)
+            {
+                if (animTimer.Enabled) { animTimer.Stop(); if (Style.Theme == 2) Compose(); } // retire le glitch / la bande en cours
+                return;
+            }
             int interval = IsActive ? 33 : 100;
             if (animTimer.Interval != interval) animTimer.Interval = interval;
             if (!animTimer.Enabled) animTimer.Start();
@@ -1131,6 +1159,15 @@ namespace Logicapp
             if (!IsActive) period *= 4f;
             animPhase += animTimer.Interval / 1000f / period;
             if (animPhase >= 1f) animPhase -= (float)Math.Floor(animPhase);
+            if (Style.Theme == 2)
+            {
+                long now = Clock.ElapsedMilliseconds;
+                if (now >= nextGlitch)
+                {
+                    glitchUntil = now + 160 + glitchRnd.Next(180);          // rafale de 0,16 à 0,34 s
+                    nextGlitch = now + 2800 + glitchRnd.Next(3500);         // la suivante dans 3 à 6 s
+                }
+            }
             Compose();
         }
 
@@ -2042,6 +2079,48 @@ namespace Logicapp
             }
             else if (theme == 2 && open)
             {
+                if (animTimer.Enabled && h > titleH + 4)
+                {
+                    using (var panel = Chamfer(new RectangleF(0, titleH, w, h - titleH), cut, false, false, true, false))
+                    {
+                        g.SetClip(panel);
+                        long now = Clock.ElapsedMilliseconds;
+                        // Bande de rafraîchissement (écran CRT) qui descend en continu
+                        float ph = (now % 3200) / 3200f, band = app.S(46);
+                        float by = titleH - band + ph * (h - titleH + band * 2);
+                        using (var rb = new LinearGradientBrush(new RectangleF(0, by - band / 2, w, band), Color.Transparent, Color.Transparent, 90f))
+                        {
+                            var cb = new ColorBlend(3);
+                            cb.Colors = new[] { Color.FromArgb(0, Style.TitleColor), Color.FromArgb(34, Style.TitleColor), Color.FromArgb(0, Style.TitleColor) };
+                            cb.Positions = new[] { 0f, 0.5f, 1f };
+                            rb.InterpolationColors = cb;
+                            g.FillRectangle(rb, 0, by - band / 2, w, band);
+                        }
+                        using (var lp = new Pen(Color.FromArgb(60, Style.TitleColor))) g.DrawLine(lp, 0, by, w, by);
+
+                        // Rafale de glitch : tranches décalées + fantômes magenta / cyan
+                        if (now < glitchUntil && layer != null)
+                        {
+                            var rnd = glitchRnd;
+                            if (rnd.Next(3) == 0)
+                                using (var fl = new SolidBrush(Color.FromArgb(16, Style.TitleColor))) g.FillRectangle(fl, 0, titleH, w, h - titleH);
+                            int n = 3 + rnd.Next(4);
+                            for (int k = 0; k < n; k++)
+                            {
+                                int sh = app.S(3) + rnd.Next(app.S(14));
+                                int sy = titleH + 2 + rnd.Next(Math.Max(1, h - titleH - sh - 2));
+                                int dx = (rnd.Next(2) == 0 ? -1 : 1) * (app.S(4) + rnd.Next(app.S(14)));
+                                int split = app.S(2) + rnd.Next(app.S(3));
+                                g.CompositingMode = CompositingMode.SourceCopy;
+                                g.DrawImage(layer, new Rectangle(dx, sy, w, sh), 0, sy, w, sh, GraphicsUnit.Pixel);
+                                g.CompositingMode = CompositingMode.SourceOver;
+                                g.DrawImage(layer, new Rectangle(dx - split, sy, w, sh), 0, sy, w, sh, GraphicsUnit.Pixel, GhostCyan);
+                                g.DrawImage(layer, new Rectangle(dx + split, sy, w, sh), 0, sy, w, sh, GraphicsUnit.Pixel, GhostMagenta);
+                            }
+                        }
+                        g.ResetClip();
+                    }
+                }
                 // Night City : faisceau magenta qui balaie le haut du panneau
                 float seg = Math.Max(20, w * 0.3f), x = -seg + animPhase * (w + seg), y = titleH;
                 using (var pb = new LinearGradientBrush(new RectangleF(x, y, seg, app.S(2)), Color.Transparent, Color.Transparent, 0f))
