@@ -122,6 +122,14 @@ namespace Logicapp
         public static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, IntPtr pptDst, ref SIZE psize,
             IntPtr hdcSrc, ref POINT pptSrc, int crKey, ref BLENDFUNCTION pblend, int flags);
 
+        [DllImport("gdi32.dll")]
+        public static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFOHEADER bmi, uint usage, out IntPtr bits, IntPtr section, uint offset);
+        [StructLayout(LayoutKind.Sequential)]
+        public struct BITMAPINFOHEADER
+        {
+            public uint biSize; public int biWidth, biHeight; public ushort biPlanes, biBitCount;
+            public uint biCompression, biSizeImage; public int biXPelsPerMeter, biYPelsPerMeter; public uint biClrUsed, biClrImportant;
+        }
         [StructLayout(LayoutKind.Sequential)] public struct SIZE { public int cx, cy; }
         [StructLayout(LayoutKind.Sequential)] public struct POINT { public int x, y; }
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -382,8 +390,11 @@ namespace Logicapp
     // =====================================================================================
     class ZoneStyle
     {
-        public int IconSize = 48, Spacing = 0, CornerRadius = 8, BorderWidth = 0;
-        public int BgAlpha = 200, BgImageAlpha = 255, TitleAlpha = 230, BorderAlpha = 60;
+        // Valeurs par défaut = preset « Néon RGB »
+        public int Theme = 1;         // 0 Classique, 1 Néon RGB, 2 Night City, 3 Studio
+        public int RgbAnim = 1;       // 0 Désactivée, 1 Au survol, 2 Toujours (lente)
+        public int IconSize = 48, Spacing = 0, CornerRadius = 14, BorderWidth = 2;
+        public int BgAlpha = 215, BgImageAlpha = 255, TitleAlpha = 0, BorderAlpha = 255;
         public int BgImageMode = 0;   // 0 Remplir, 1 Ajuster, 2 Étirer, 3 Mosaïque, 4 Centrer
         public int TitleAlign = 0;    // 0 Gauche, 1 Centre, 2 Droite
         public bool LabelShadow = true, ShowCount = true;
@@ -391,14 +402,56 @@ namespace Logicapp
         public int SortMode = 0;      // 0 Nom, 1 Date de création, 2 Libre (rangement à la souris)
         public bool SortDesc = false; // ordre inverse (Nom / Date)
         public string BgImage = "";
-        public string LabelFont = "Segoe UI|9|0", TitleFont = "Segoe UI Semibold|9.5|0";
+        public string LabelFont = "Segoe UI|9|0", TitleFont = "Bahnschrift SemiBold|10.5|0";
         public Color LabelColor = Color.White;
-        public Color BgColor = Color.FromArgb(30, 32, 38);
-        public Color TitleColor = Color.FromArgb(50, 54, 66);
-        public Color TitleTextColor = Color.FromArgb(236, 238, 244);
+        public Color BgColor = Color.FromArgb(10, 9, 20);
+        public Color TitleColor = Color.FromArgb(20, 18, 40);
+        public Color TitleTextColor = Color.FromArgb(240, 240, 255);
         public Color BorderColor = Color.White;
 
+        public static readonly string[] PresetNames = { "Classique", "Néon RGB", "Night City", "Studio" };
+
         public ZoneStyle Clone() { return (ZoneStyle)MemberwiseClone(); }
+
+        // Preset : couleurs, polices et forme ; garde le comportement (taille d'icônes, tri, opacité au repos, image…).
+        public static ZoneStyle Preset(int theme, ZoneStyle keep)
+        {
+            var s = new ZoneStyle();
+            if (keep != null)
+            {
+                s.IconSize = keep.IconSize; s.Spacing = keep.Spacing; s.IdleOpacity = keep.IdleOpacity;
+                s.SortMode = keep.SortMode; s.SortDesc = keep.SortDesc; s.ShowCount = keep.ShowCount;
+                s.LabelShadow = keep.LabelShadow; s.RgbAnim = keep.RgbAnim; s.TitleAlign = keep.TitleAlign;
+                s.BgImage = keep.BgImage; s.BgImageMode = keep.BgImageMode; s.BgImageAlpha = keep.BgImageAlpha;
+            }
+            s.Theme = Math.Max(0, Math.Min(3, theme));
+            switch (s.Theme)
+            {
+                case 0: // Classique (style d'origine)
+                    s.BgColor = Color.FromArgb(30, 32, 38); s.BgAlpha = 200;
+                    s.TitleColor = Color.FromArgb(50, 54, 66); s.TitleAlpha = 230;
+                    s.TitleTextColor = Color.FromArgb(236, 238, 244); s.TitleFont = "Segoe UI Semibold|9.5|0";
+                    s.CornerRadius = 8; s.BorderWidth = 0; s.BorderColor = Color.White; s.BorderAlpha = 60;
+                    s.LabelFont = "Segoe UI|9|0";
+                    break;
+                case 2: // Night City : onglet cyan, accents magenta
+                    s.BgColor = Color.FromArgb(6, 14, 22); s.BgAlpha = 205;
+                    s.TitleColor = Color.FromArgb(0, 240, 255); s.TitleAlpha = 255;
+                    s.TitleTextColor = Color.FromArgb(4, 16, 20); s.TitleFont = "Bahnschrift SemiBold|10|0";
+                    s.CornerRadius = 18; s.BorderWidth = 1; s.BorderColor = Color.FromArgb(255, 43, 214); s.BorderAlpha = 255;
+                    s.LabelFont = "Bahnschrift|9.5|0";
+                    break;
+                case 3: // Studio : sobre, liseré qui change lentement de couleur
+                    s.BgColor = Color.FromArgb(22, 22, 28); s.BgAlpha = 228;
+                    s.TitleColor = Color.FromArgb(0, 229, 255); s.TitleAlpha = 255;
+                    s.TitleTextColor = Color.FromArgb(217, 217, 227); s.TitleFont = "Bahnschrift SemiBold|10|0";
+                    s.CornerRadius = 12; s.BorderWidth = 1; s.BorderColor = Color.White; s.BorderAlpha = 22;
+                    s.LabelFont = "Segoe UI|9|0";
+                    break;
+                // 1 = Néon RGB : valeurs par défaut de la classe
+            }
+            return s;
+        }
 
         public void Write(StringBuilder sb)
         {
@@ -412,6 +465,7 @@ namespace Logicapp
             W(sb, "CornerRadius", CornerRadius); W(sb, "BorderWidth", BorderWidth);
             W(sb, "BorderColor", Hex(BorderColor)); W(sb, "BorderAlpha", BorderAlpha);
             W(sb, "IdleOpacity", IdleOpacity); W(sb, "SortMode", SortMode); W(sb, "SortDesc", SortDesc ? 1 : 0);
+            W(sb, "Theme", Theme); W(sb, "RgbAnim", RgbAnim);
         }
 
         public bool Read(string k, string v)
@@ -439,6 +493,8 @@ namespace Logicapp
                 case "BorderColor": BorderColor = C(v, BorderColor); return true;
                 case "BorderAlpha": BorderAlpha = I(v, BorderAlpha, 0, 255); return true;
                 case "IdleOpacity": IdleOpacity = I(v, IdleOpacity, 10, 100); return true;
+                case "Theme": Theme = I(v, Theme, 0, 3); return true;
+                case "RgbAnim": RgbAnim = I(v, RgbAnim, 0, 2); return true;
                 case "SortMode": SortMode = I(v, SortMode, 0, 2); return true;
                 case "SortDesc": SortDesc = v == "1"; return true;
             }
@@ -512,7 +568,7 @@ namespace Logicapp
         const string AppName = "Logicapp";
         const string OldAppName = "BureauZones"; // ancien nom (avant le renommage)
 
-        class ZoneRec { public string Name, Order = ""; public int X, Y, W = 320, H = 220; public bool Collapsed; public ZoneStyle Style; }
+        class ZoneRec { public string Name, Order = ""; public int X, Y, W = 320, H = 220; public bool Collapsed, HasTheme; public ZoneStyle Style; }
 
         public ZoneApp()
         {
@@ -595,6 +651,7 @@ namespace Logicapp
             bool createDefault = firstRun;
             Locked = false; PeekOnHover = true; DefaultStyle = new ZoneStyle();
             var recs = new List<ZoneRec>();
+            bool defaultHasTheme = false;
             if (File.Exists(ConfigPath))
             {
                 string section = null; ZoneRec cur = null;
@@ -625,7 +682,7 @@ namespace Logicapp
                         if (k == "Locked") Locked = v == "1";
                         else if (k == "PeekOnHover") PeekOnHover = v != "0";
                     }
-                    else if (section == "Default") DefaultStyle.Read(k, v);
+                    else if (section == "Default") { DefaultStyle.Read(k, v); if (k == "Theme") defaultHasTheme = true; }
                     else if (section == "Zone" && cur != null)
                     {
                         int n;
@@ -638,14 +695,18 @@ namespace Logicapp
                             case "Height": if (int.TryParse(v, out n)) cur.H = n; break;
                             case "Collapsed": cur.Collapsed = v == "1"; break;
                             case "Order": cur.Order = v; break;
-                            default: cur.Style.Read(k, v); break;
+                            default: cur.Style.Read(k, v); if (k == "Theme") cur.HasTheme = true; break;
                         }
                     }
                 }
             }
+            // Configuration d'avant les thèmes : on passe au nouveau design par défaut (Néon RGB),
+            // en gardant le comportement de chaque zone (taille d'icônes, tri, opacité au repos, image…).
+            if (!defaultHasTheme) DefaultStyle = ZoneStyle.Preset(1, DefaultStyle);
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var r in recs)
             {
+                if (!r.HasTheme) r.Style = ZoneStyle.Preset(1, r.Style);
                 string name = Sanitize(r.Name ?? "");
                 if (name.Length == 0 || !seen.Add(name)) continue;
                 AddZone(name, new Rectangle(r.X, r.Y, r.W, r.H), r.Collapsed, r.Style, r.Order);
@@ -966,7 +1027,12 @@ namespace Logicapp
         DragMode drag;
         Point downPt;
         Rectangle band;
-        Bitmap canvas, bgCache;
+        Bitmap layer, bgCache;               // couche fixe (fond, titre, icônes)
+        IntPtr dib, dibBits, dibDC, dibOld;  // image affichée par Windows (on dessine directement dedans)
+        Bitmap dibBmp;
+        int dibW, dibH;
+        readonly Timer animTimer;            // animations RGB (uniquement quand elles sont visibles)
+        float animPhase;
         string tipText = "";
         SettingsForm settingsForm;
 
@@ -1006,6 +1072,8 @@ namespace Logicapp
             peekTimer.Tick += delegate { CheckPeek(); };
             fadeTimer = new Timer { Interval = 15 };
             fadeTimer.Tick += delegate { FadeStep(); };
+            animTimer = new Timer { Interval = 33 };
+            animTimer.Tick += delegate { AnimStep(); };
             menu.Closed += delegate { RefreshMouseInside(); };
             curAlpha = IdleAlpha;
 
@@ -1031,6 +1099,7 @@ namespace Logicapp
         {
             int target = IsActive ? 255 : IdleAlpha;
             if (target != curAlpha) fadeTimer.Start();
+            UpdateAnim();
         }
 
         void FadeStep()
@@ -1039,7 +1108,30 @@ namespace Logicapp
             int step = 36; // ~100-120 ms pour un fondu complet
             if (Math.Abs(target - curAlpha) <= step) { curAlpha = target; fadeTimer.Stop(); }
             else curAlpha += target > curAlpha ? step : -step;
-            if (canvas != null && IsHandleCreated) PushLayered(canvas);
+            if (IsHandleCreated) PushLayered();
+        }
+
+        // ---------- Animations RGB ----------
+        // Fluides (30 i/s) quand la souris est sur la zone, très lentes (10 i/s) en mode « Toujours »,
+        // arrêtées sinon : au repos l'app reste à ~0 % de processeur.
+
+        void UpdateAnim()
+        {
+            int mode = Style.Theme == 0 ? 0 : Style.RgbAnim;
+            bool run = IsHandleCreated && (mode == 2 || (mode == 1 && IsActive));
+            if (!run) { animTimer.Stop(); return; }
+            int interval = IsActive ? 33 : 100;
+            if (animTimer.Interval != interval) animTimer.Interval = interval;
+            if (!animTimer.Enabled) animTimer.Start();
+        }
+
+        void AnimStep()
+        {
+            float period = Style.Theme == 1 ? 4f : Style.Theme == 2 ? 2.6f : 8f; // secondes par cycle
+            if (!IsActive) period *= 4f;
+            animPhase += animTimer.Interval / 1000f / period;
+            if (animPhase >= 1f) animPhase -= (float)Math.Floor(animPhase);
+            Compose();
         }
 
         void RefreshMouseInside()
@@ -1203,6 +1295,7 @@ namespace Logicapp
             IntPtr progman = Native.FindWindow("Progman", null);
             if (progman != IntPtr.Zero) Native.SetOwner(Handle, progman);
             Render();
+            UpdateAnim();
         }
 
         protected override void OnShown(EventArgs e)
@@ -1274,11 +1367,14 @@ namespace Logicapp
             allowDestroy = true;
             peekTimer.Stop();
             refreshTimer.Stop();
+            animTimer.Stop();
+            fadeTimer.Stop();
             if (watcher != null) { watcher.Dispose(); watcher = null; }
             if (settingsForm != null && !settingsForm.IsDisposed) settingsForm.Close();
             try { Close(); Dispose(); } catch { }
             foreach (var it in items) if (it.Icon != null) it.Icon.Dispose();
-            if (canvas != null) canvas.Dispose();
+            if (layer != null) layer.Dispose();
+            FreeDib();
             if (bgCache != null) bgCache.Dispose();
         }
 
@@ -1497,29 +1593,160 @@ namespace Logicapp
             catch { }
         }
 
+        // ---------- Formes et styles ----------
+
+        // Polygone à coins coupés (style cyberpunk) : tl/tr/br/bl = coins à couper.
+        static GraphicsPath Chamfer(RectangleF r, float c, bool tl, bool tr, bool br, bool bl)
+        {
+            c = Math.Max(0, Math.Min(c, Math.Min(r.Width, r.Height) / 2f));
+            var pts = new List<PointF>();
+            if (tl) { pts.Add(new PointF(r.X, r.Y + c)); pts.Add(new PointF(r.X + c, r.Y)); } else pts.Add(new PointF(r.X, r.Y));
+            if (tr) { pts.Add(new PointF(r.Right - c, r.Y)); pts.Add(new PointF(r.Right, r.Y + c)); } else pts.Add(new PointF(r.Right, r.Y));
+            if (br) { pts.Add(new PointF(r.Right, r.Bottom - c)); pts.Add(new PointF(r.Right - c, r.Bottom)); } else pts.Add(new PointF(r.Right, r.Bottom));
+            if (bl) { pts.Add(new PointF(r.X + c, r.Bottom)); pts.Add(new PointF(r.X, r.Bottom - c)); } else pts.Add(new PointF(r.X, r.Bottom));
+            var p = new GraphicsPath();
+            p.AddPolygon(pts.ToArray());
+            return p;
+        }
+
+        // Forme de la zone selon le thème. « full » = avec le bas (faux pour la seule barre de titre d'une zone ouverte).
+        GraphicsPath ShapePath(RectangleF r, float cut, bool full)
+        {
+            switch (Style.Theme)
+            {
+                case 1: return Chamfer(r, cut, true, false, full, false);  // Néon : haut-gauche + bas-droite
+                case 2: return Chamfer(r, cut, false, false, full, false); // Night City : bas-droite
+                case 3: return Chamfer(r, cut, false, true, false, false); // Studio : haut-droite
+                default: return RoundRect(r, cut, full);
+            }
+        }
+
+        static readonly Color[] Rainbow =
+        {
+            Color.FromArgb(255, 0, 76), Color.FromArgb(255, 184, 0), Color.FromArgb(61, 255, 110),
+            Color.FromArgb(0, 229, 255), Color.FromArgb(122, 92, 255), Color.FromArgb(255, 43, 214), Color.FromArgb(255, 0, 76)
+        };
+
+        static ColorBlend RainbowBlend(int alpha)
+        {
+            var cb = new ColorBlend(Rainbow.Length);
+            for (int i = 0; i < Rainbow.Length; i++)
+            {
+                cb.Colors[i] = Color.FromArgb(alpha, Rainbow[i]);
+                cb.Positions[i] = i / (float)(Rainbow.Length - 1);
+            }
+            return cb;
+        }
+
+        static Color HueShift(Color c, float degrees)
+        {
+            float h = (c.GetHue() + degrees) % 360f, s = c.GetSaturation(), l = c.GetBrightness();
+            float q = l < 0.5f ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+            Func<float, float> f = t =>
+            {
+                if (t < 0) t += 1; if (t > 1) t -= 1;
+                if (t < 1f / 6) return p + (q - p) * 6 * t;
+                if (t < 0.5f) return q;
+                if (t < 2f / 3) return p + (q - p) * (2f / 3 - t) * 6;
+                return p;
+            };
+            float hk = h / 360f;
+            return Color.FromArgb(c.A, (int)(f(hk + 1f / 3) * 255), (int)(f(hk) * 255), (int)(f(hk - 1f / 3) * 255));
+        }
+
+        Color AccentColor { get { return Style.Theme == 1 ? Color.FromArgb(0, 229, 255) : Style.TitleColor; } }
+
+        // Texte espacé (lettres écartées), avec « … » s'il ne tient pas. Renvoie la largeur (mesure seule si brush == null).
+        static float DrawTracked(Graphics g, string s, Font f, Brush b, float x, float yMid, float track, float maxRight)
+        {
+            using (var fmt = (StringFormat)StringFormat.GenericTypographic.Clone())
+            {
+                fmt.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
+                float hgt = f.GetHeight(g), cx = x;
+                float ell = g.MeasureString("…", f, PointF.Empty, fmt).Width;
+                // Largeur totale : si tout tient, on dessine sans jamais couper.
+                float total = 0;
+                for (int i = 0; i < s.Length; i++)
+                    total += g.MeasureString(s[i].ToString(), f, PointF.Empty, fmt).Width + (i == s.Length - 1 ? 0 : track);
+                if (x + total <= maxRight + 0.5f)
+                {
+                    if (b != null)
+                        for (int i = 0; i < s.Length; i++)
+                        {
+                            string ch = s[i].ToString();
+                            g.DrawString(ch, f, b, cx, yMid - hgt / 2, fmt);
+                            cx += g.MeasureString(ch, f, PointF.Empty, fmt).Width + track;
+                        }
+                    return total;
+                }
+                for (int i = 0; i < s.Length; i++)
+                {
+                    string ch = s[i].ToString();
+                    float cw = g.MeasureString(ch, f, PointF.Empty, fmt).Width;
+                    bool last = i == s.Length - 1;
+                    if (cx + cw + (last ? 0 : ell) > maxRight && !(last && cx + cw <= maxRight))
+                    {
+                        if (b != null) g.DrawString("…", f, b, cx, yMid - hgt / 2, fmt);
+                        cx += ell;
+                        break;
+                    }
+                    if (b != null) g.DrawString(ch, f, b, cx, yMid - hgt / 2, fmt);
+                    cx += cw + (last ? 0 : track);
+                }
+                return cx - x;
+            }
+        }
+
+        void DrawChevron(Graphics g, float x, float yMid, bool open, Color c)
+        {
+            float s = ZoneApp.I.S(5);
+            PointF[] pts = open
+                ? new[] { new PointF(x, yMid - s * 0.5f), new PointF(x + s * 1.6f, yMid - s * 0.5f), new PointF(x + s * 0.8f, yMid + s * 0.6f) }
+                : new[] { new PointF(x + s * 0.2f, yMid - s * 0.8f), new PointF(x + s * 1.2f, yMid), new PointF(x + s * 0.2f, yMid + s * 0.8f) };
+            using (var b = new SolidBrush(c)) g.FillPolygon(b, pts);
+        }
+
+        // ---------- Rendu ----------
+
         public void Render()
         {
             if (!IsHandleCreated || IsDisposed || Width <= 0 || Height <= 0) return;
+            RenderStatic();
+            Compose();
+        }
+
+        // Couche fixe : redessinée seulement quand quelque chose change (survol d'une icône, contenu, réglages…).
+        void RenderStatic()
+        {
             var app = ZoneApp.I;
             int w = Width, h = Height;
-            if (canvas == null || canvas.Width != w || canvas.Height != h)
+            if (layer == null || layer.Width != w || layer.Height != h)
             {
-                if (canvas != null) canvas.Dispose();
-                canvas = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+                if (layer != null) layer.Dispose();
+                layer = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
             }
-            using (var g = Graphics.FromImage(canvas))
+            int theme = Style.Theme;
+            bool open = IsOpen;
+            float cut = app.S(Style.CornerRadius);
+            using (var g = Graphics.FromImage(layer))
             {
                 g.Clear(Color.Transparent);
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 g.PixelOffsetMode = PixelOffsetMode.HighQuality;
                 g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-                float rad = app.S(Style.CornerRadius);
-                bool open = IsOpen;
 
-                using (var shape = RoundRect(new RectangleF(0, 0, w, h), rad, true))
+                // --- Fond ---
+                GraphicsPath shape;
+                if (theme == 2)
                 {
-                    // Fond : couleur (alpha mini 1 pour que la zone reste cliquable) puis image
+                    // Night City : rangée de titre invisible (mais cliquable) + panneau sous l'onglet
+                    using (var hb = new SolidBrush(Color.FromArgb(1, 0, 0, 0))) g.FillRectangle(hb, 0, 0, w, titleH);
+                    shape = h > titleH ? Chamfer(new RectangleF(0, titleH, w, h - titleH), cut, false, false, true, false) : null;
+                }
+                else shape = ShapePath(new RectangleF(0, 0, w, h), cut, true);
+                if (shape != null)
+                {
                     using (var b = new SolidBrush(Color.FromArgb(Math.Max(1, Style.BgAlpha), Style.BgColor))) g.FillPath(b, shape);
                     if (bgCache != null)
                         using (var tb = new TextureBrush(bgCache, WrapMode.Clamp))
@@ -1530,24 +1757,86 @@ namespace Logicapp
                         }
                 }
 
-                // Barre de titre
-                using (var tp = RoundRect(new RectangleF(0, 0, w, titleH), rad, !open))
-                using (var b = new SolidBrush(Color.FromArgb(Style.TitleAlpha, Style.TitleColor)))
-                    g.FillPath(b, tp);
-                string text = (open ? "▾  " : "▸  ") + ZoneName + (Collapsed && Style.ShowCount ? "   (" + items.Count + ")" : "");
-                RectangleF tr = Style.TitleAlign == 1
-                    ? new RectangleF(titleH, 0, Math.Max(1, w - 2 * titleH), titleH)
-                    : new RectangleF(app.S(10), 0, Math.Max(1, w - app.S(10) - titleH), titleH);
-                using (var sf = new StringFormat(StringFormatFlags.NoWrap))
-                using (var b = new SolidBrush(Style.TitleTextColor))
+                // --- Barre de titre ---
+                float yMid = titleH / 2f;
+                Rectangle gr = GearRect;
+                float right = gr.X - app.S(4);
+                if (theme == 0)
                 {
-                    sf.LineAlignment = StringAlignment.Center;
-                    sf.Alignment = Style.TitleAlign == 0 ? StringAlignment.Near : Style.TitleAlign == 1 ? StringAlignment.Center : StringAlignment.Far;
-                    sf.Trimming = StringTrimming.EllipsisCharacter;
-                    g.DrawString(text, titleFont, b, tr, sf);
+                    using (var tp = RoundRect(new RectangleF(0, 0, w, titleH), cut, !open))
+                    using (var b = new SolidBrush(Color.FromArgb(Style.TitleAlpha, Style.TitleColor)))
+                        g.FillPath(b, tp);
+                    string text = (open ? "▾  " : "▸  ") + ZoneName + (Collapsed && Style.ShowCount ? "   (" + items.Count + ")" : "");
+                    RectangleF tr = Style.TitleAlign == 1
+                        ? new RectangleF(titleH, 0, Math.Max(1, w - 2 * titleH), titleH)
+                        : new RectangleF(app.S(10), 0, Math.Max(1, w - app.S(10) - titleH), titleH);
+                    using (var sf = new StringFormat(StringFormatFlags.NoWrap))
+                    using (var b = new SolidBrush(Style.TitleTextColor))
+                    {
+                        sf.LineAlignment = StringAlignment.Center;
+                        sf.Alignment = Style.TitleAlign == 0 ? StringAlignment.Near : Style.TitleAlign == 1 ? StringAlignment.Center : StringAlignment.Far;
+                        sf.Trimming = StringTrimming.EllipsisCharacter;
+                        g.DrawString(text, titleFont, b, tr, sf);
+                    }
+                }
+                else
+                {
+                    string name = ZoneName.ToUpperInvariant();
+                    float track = Math.Max(1f, titleFont.Size * 0.18f) * app.Scale;
+                    if (theme == 1 && Style.TitleAlpha > 0)
+                        using (var tp = ShapePath(new RectangleF(0, 0, w, titleH), cut, !open))
+                        using (var b = new SolidBrush(Color.FromArgb(Style.TitleAlpha, Style.TitleColor))) g.FillPath(b, tp);
 
-                    // Roue crantée
-                    Rectangle gr = GearRect;
+                    // Compteur à droite (Night City : « // 08 ITEMS » ; Studio : « 8 éléments » ; Néon : seulement replié)
+                    string count = null;
+                    if (theme == 2) count = "// " + items.Count.ToString("00") + (items.Count > 1 ? " ITEMS" : " ITEM");
+                    else if (theme == 3) count = items.Count + (items.Count > 1 ? " éléments" : " élément");
+                    else if (Collapsed && Style.ShowCount) count = "(" + items.Count + ")";
+                    if (count != null)
+                    {
+                        using (var cf = new Font(labelFont.FontFamily, Math.Max(7f, titleFont.SizeInPoints * 0.82f), FontStyle.Regular, GraphicsUnit.Point))
+                        {
+                            Color cc = theme == 2 ? Style.BorderColor : Color.FromArgb(150, Style.TitleTextColor);
+                            float cw = DrawTracked(g, count, cf, null, 0, yMid, theme == 2 ? track : 0, float.MaxValue);
+                            float cx = right - cw;
+                            using (var cb = new SolidBrush(cc)) DrawTracked(g, count, cf, cb, cx, yMid, theme == 2 ? track : 0, right);
+                            right = cx - app.S(8);
+                        }
+                    }
+
+                    float x0 = app.S(12) + (theme == 1 ? cut * 0.35f : 0);
+                    Color txt = Style.TitleTextColor;
+                    if (theme == 2)
+                    {
+                        // Onglet cyan biseauté
+                        float slant = titleH * 0.75f;
+                        float tw = DrawTracked(g, name, titleFont, null, 0, yMid, track, float.MaxValue);
+                        float tabW = Math.Min(x0 + app.S(16) + tw + slant + app.S(6), right - app.S(4));
+                        tabW = Math.Max(tabW, x0 + app.S(16) + slant + app.S(20));
+                        using (var tab = new GraphicsPath())
+                        {
+                            tab.AddPolygon(new[] { new PointF(0, 0), new PointF(tabW - slant, 0), new PointF(tabW, titleH), new PointF(0, titleH) });
+                            using (var b = new SolidBrush(Color.FromArgb(Style.TitleAlpha, Style.TitleColor))) g.FillPath(b, tab);
+                        }
+                        DrawChevron(g, x0, yMid, open, txt);
+                        using (var b = new SolidBrush(txt)) DrawTracked(g, name, titleFont, b, x0 + app.S(16), yMid, track, tabW - slant);
+                    }
+                    else
+                    {
+                        float avail = right - x0 - app.S(16);
+                        float tw = Math.Min(DrawTracked(g, name, titleFont, null, 0, yMid, track, float.MaxValue), avail);
+                        float tx = x0 + app.S(16);
+                        if (Style.TitleAlign == 1) tx = Math.Max(tx, (w - tw) / 2f);
+                        else if (Style.TitleAlign == 2) tx = Math.Max(tx, right - tw);
+                        DrawChevron(g, tx - app.S(16), yMid, open, Color.FromArgb(200, txt));
+                        using (var b = new SolidBrush(txt)) DrawTracked(g, name, titleFont, b, tx, yMid, track, right);
+                    }
+                }
+
+                // --- Roue crantée ---
+                using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                {
+                    Color gc = theme == 2 ? Style.TitleColor : Style.TitleTextColor;
                     if (hoverGear)
                     {
                         int d = (int)(titleH * 0.72);
@@ -1555,17 +1844,44 @@ namespace Logicapp
                             g.FillEllipse(hb, gr.X + (gr.Width - d) / 2, gr.Y + (gr.Height - d) / 2, d, d);
                     }
                     int ga = hoverGear ? 255 : mouseInside ? 190 : 110;
-                    sf.Alignment = StringAlignment.Center;
-                    using (var gb = new SolidBrush(Color.FromArgb(ga, Style.TitleTextColor)))
+                    using (var gb = new SolidBrush(Color.FromArgb(ga, gc)))
                         g.DrawString(gearGlyph, gearFont, gb, new RectangleF(gr.X, gr.Y + 1, gr.Width, gr.Height), sf);
                 }
 
-                // Icônes
+                // --- Décor fixe Night City (lignes de balayage, contour, crochets) ---
+                if (theme == 2 && shape != null)
+                {
+                    g.SetClip(shape);
+                    using (var sp = new Pen(Color.FromArgb(14, Style.TitleColor)))
+                        for (int y = titleH + 2; y < h; y += Math.Max(2, app.S(3))) g.DrawLine(sp, 0, y, w, y);
+                    g.ResetClip();
+                    using (var op = new Pen(Color.FromArgb(150, Style.TitleColor), Math.Max(1, app.S(Style.BorderWidth))))
+                    using (var ip = Chamfer(new RectangleF(0.5f, titleH, w - 1, h - titleH - 0.5f), cut, false, false, true, false))
+                        g.DrawPath(op, ip);
+                    using (var tp = new Pen(Style.TitleColor, app.S(2))) g.DrawLine(tp, 0, titleH + app.S(1), w, titleH + app.S(1));
+                    float bl = app.S(10), bwid = app.S(2);
+                    using (var mp = new Pen(Color.FromArgb(Style.BorderAlpha, Style.BorderColor), bwid))
+                    {
+                        g.DrawLines(mp, new[] { new PointF(bwid / 2, h - bl), new PointF(bwid / 2, h - bwid / 2), new PointF(bl, h - bwid / 2) });
+                        float c2 = Math.Min(cut, Math.Min(w, h - titleH) / 2f);
+                        g.DrawLine(mp, w - c2 + bwid, h - bwid / 2, w - bwid / 2, h - c2 + bwid);
+                    }
+                }
+                if (theme == 2)
+                    using (var mp = new Pen(Color.FromArgb(Style.BorderAlpha, Style.BorderColor), app.S(2)))
+                    {
+                        float bl = app.S(10), o = app.S(1);
+                        g.DrawLines(mp, new[] { new PointF(o, bl), new PointF(o, o), new PointF(bl, o) });
+                    }
+
+                // --- Icônes ---
                 if (open)
                 {
                     Rectangle cr = ContentRect;
                     g.SetClip(cr);
                     int isz = app.S(Style.IconSize);
+                    bool neonHover = theme == 1 || theme == 2;
+                    Color acc = AccentColor;
                     using (var sf = new StringFormat())
                     using (var lb = new SolidBrush(Style.LabelColor))
                     using (var sb = new SolidBrush(Color.FromArgb(170, 0, 0, 0)))
@@ -1578,16 +1894,28 @@ namespace Logicapp
                             Rectangle cell = CellRect(i);
                             if (cell.Bottom < cr.Top || cell.Top > cr.Bottom) continue;
                             bool sel = selected.Contains(items[i].FullPath);
-                            if (sel || i == hover)
+                            var ir = new Rectangle(cell.X + (cell.Width - isz) / 2, cell.Y + app.S(6), isz, isz);
+                            if (sel || (i == hover && !neonHover))
                             {
                                 using (var hp = RoundRect(HitRect(i), app.S(5), true))
                                 {
-                                    using (var hb = new SolidBrush(sel ? Color.FromArgb(i == hover ? 120 : 95, 0, 120, 215) : Color.FromArgb(32, 255, 255, 255)))
-                                        g.FillPath(hb, hp);
-                                    if (sel) using (var pen = new Pen(Color.FromArgb(150, 90, 170, 255))) g.DrawPath(pen, hp);
+                                    Color fill = !sel ? Color.FromArgb(32, 255, 255, 255)
+                                        : neonHover ? Color.FromArgb(i == hover ? 70 : 50, acc) : Color.FromArgb(i == hover ? 120 : 95, 0, 120, 215);
+                                    using (var hb = new SolidBrush(fill)) g.FillPath(hb, hp);
+                                    if (sel)
+                                        using (var pen = new Pen(neonHover ? Color.FromArgb(210, acc) : Color.FromArgb(150, 90, 170, 255))) g.DrawPath(pen, hp);
                                 }
                             }
-                            var ir = new Rectangle(cell.X + (cell.Width - isz) / 2, cell.Y + app.S(6), isz, isz);
+                            if (i == hover && neonHover)
+                            {
+                                // Halo néon autour de l'icône survolée
+                                var hr = Rectangle.Inflate(ir, app.S(4), app.S(4));
+                                using (var hp = RoundRect(hr, app.S(7), true))
+                                {
+                                    using (var glow = new Pen(Color.FromArgb(70, acc), app.S(6))) g.DrawPath(glow, hp);
+                                    using (var line = new Pen(Color.FromArgb(235, 255, 255, 255), app.S(2))) g.DrawPath(line, hp);
+                                }
+                            }
                             if (items[i].Icon != null) g.DrawImage(items[i].Icon, ir);
                             var lr = new RectangleF(cell.X + app.S(4), ir.Bottom + app.S(4), cell.Width - app.S(8), 2 * lineH + 2);
                             if (Style.LabelShadow)
@@ -1608,12 +1936,10 @@ namespace Logicapp
                         {
                             refCell = CellRect(dropIndex);
                             xLine = refCell.X;
-                            // Début de ligne : le repère reste dans la zone
                             if (dropIndex % lastCols == 0) xLine += app.S(2);
                         }
                         else { refCell = CellRect(items.Count - 1); xLine = refCell.Right - app.S(2); }
-                        float lw = app.S(3);
-                        using (var pen = new Pen(Color.FromArgb(240, 60, 150, 255), lw) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                        using (var pen = new Pen(Color.FromArgb(240, 60, 150, 255), app.S(3)) { StartCap = LineCap.Round, EndCap = LineCap.Round })
                             g.DrawLine(pen, xLine, refCell.Y + app.S(6), xLine, refCell.Bottom - app.S(6));
                     }
                     // Ascenseur
@@ -1631,44 +1957,157 @@ namespace Logicapp
                     g.ResetClip();
                 }
 
-                // Bordure
-                if (Style.BorderWidth > 0)
+                // --- Bordures fixes ---
+                if ((theme == 0 || theme == 3) && Style.BorderWidth > 0)
                 {
                     float bw = app.S(Style.BorderWidth);
                     using (var pen = new Pen(Color.FromArgb(Style.BorderAlpha, Style.BorderColor), bw))
-                    using (var bp = RoundRect(new RectangleF(bw / 2, bw / 2, w - bw, h - bw), Math.Max(0, rad - bw / 2), true))
+                    using (var bp = ShapePath(new RectangleF(bw / 2, bw / 2, w - bw, h - bw), Math.Max(0, cut - bw / 2), true))
                         g.DrawPath(pen, bp);
                 }
                 if (dropHover)
                 {
                     float bw = app.S(2);
                     using (var pen = new Pen(Color.FromArgb(230, 0, 120, 215), bw))
-                    using (var bp = RoundRect(new RectangleF(bw / 2, bw / 2, w - bw, h - bw), Math.Max(0, rad - bw / 2), true))
+                    using (var bp = ShapePath(new RectangleF(bw / 2, bw / 2, w - bw, h - bw), Math.Max(0, cut - bw / 2), true))
                         g.DrawPath(pen, bp);
                 }
+                if (shape != null) shape.Dispose();
             }
-            PushLayered(canvas);
         }
 
-        void PushLayered(Bitmap bmp)
+        // Assemble la couche fixe + les éléments animés, directement dans l'image affichée par Windows.
+        void Compose()
         {
-            IntPtr screen = Native.GetDC(IntPtr.Zero), mem = Native.CreateCompatibleDC(screen), hb = IntPtr.Zero, old = IntPtr.Zero;
+            if (!IsHandleCreated || IsDisposed || layer == null) return;
+            int w = layer.Width, h = layer.Height;
+            EnsureDib(w, h);
+            if (dibBmp == null) return;
+            using (var g = Graphics.FromImage(dibBmp))
+            {
+                g.CompositingMode = CompositingMode.SourceCopy;
+                g.DrawImage(layer, new Rectangle(0, 0, w, h), 0, 0, w, h, GraphicsUnit.Pixel);
+                g.CompositingMode = CompositingMode.SourceOver;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                DrawAnimated(g, w, h);
+            }
+            PushLayered();
+        }
+
+        void DrawAnimated(Graphics g, int w, int h)
+        {
+            var app = ZoneApp.I;
+            int theme = Style.Theme;
+            bool open = IsOpen;
+            float cut = app.S(Style.CornerRadius);
+            if (theme == 1)
+            {
+                // Néon RGB : ligne arc-en-ciel qui défile sous le titre + bordure arc-en-ciel qui tourne
+                if (open)
+                {
+                    float x0 = app.S(12), len = Math.Max(1, w - 2 * x0), y = titleH - app.S(2);
+                    using (var lb = new LinearGradientBrush(new RectangleF(x0, y, len, app.S(2)), Color.Black, Color.Black, 0f))
+                    {
+                        lb.InterpolationColors = RainbowBlend(255);
+                        lb.WrapMode = WrapMode.Tile;
+                        lb.TranslateTransform(animPhase * len, 0, MatrixOrder.Append);
+                        g.FillRectangle(lb, x0, y, len, app.S(2));
+                    }
+                    using (var gl = new LinearGradientBrush(new RectangleF(x0, y, len, app.S(6)), Color.Black, Color.Black, 0f))
+                    {
+                        gl.InterpolationColors = RainbowBlend(55);
+                        gl.WrapMode = WrapMode.Tile;
+                        gl.TranslateTransform(animPhase * len, 0, MatrixOrder.Append);
+                        g.FillRectangle(gl, x0, y + app.S(2), len, app.S(4));
+                    }
+                }
+                if (Style.BorderWidth > 0)
+                {
+                    float bw = app.S(Style.BorderWidth);
+                    var rect = new Rectangle(0, 0, w, h);
+                    using (var shape = ShapePath(new RectangleF(0, 0, w, h), cut, true))
+                    using (var bp = ShapePath(new RectangleF(bw / 2, bw / 2, w - bw, h - bw), Math.Max(0, cut - bw / 2), true))
+                    using (var glowB = new LinearGradientBrush(rect, Color.Black, Color.Black, animPhase * 360f))
+                    using (var lineB = new LinearGradientBrush(rect, Color.Black, Color.Black, animPhase * 360f))
+                    {
+                        glowB.InterpolationColors = RainbowBlend(Math.Min(255, Style.BorderAlpha) * 60 / 255);
+                        lineB.InterpolationColors = RainbowBlend(Style.BorderAlpha);
+                        g.SetClip(shape);
+                        using (var gp = new Pen(glowB, bw + app.S(6))) g.DrawPath(gp, bp);
+                        g.ResetClip();
+                        using (var lp = new Pen(lineB, bw)) g.DrawPath(lp, bp);
+                    }
+                }
+            }
+            else if (theme == 2 && open)
+            {
+                // Night City : faisceau magenta qui balaie le haut du panneau
+                float seg = Math.Max(20, w * 0.3f), x = -seg + animPhase * (w + seg), y = titleH;
+                using (var pb = new LinearGradientBrush(new RectangleF(x, y, seg, app.S(2)), Color.Transparent, Color.Transparent, 0f))
+                {
+                    var cb = new ColorBlend(3);
+                    cb.Colors = new[] { Color.FromArgb(0, Style.BorderColor), Color.FromArgb(255, Style.BorderColor), Color.FromArgb(0, Style.BorderColor) };
+                    cb.Positions = new[] { 0f, 0.5f, 1f };
+                    pb.InterpolationColors = cb;
+                    g.FillRectangle(pb, x, y, seg, app.S(2));
+                }
+            }
+            else if (theme == 3)
+            {
+                // Studio : liseré du haut dont la couleur évolue lentement
+                Color c = HueShift(Style.TitleColor, animPhase * 360f);
+                using (var shape = ShapePath(new RectangleF(0, 0, w, h), cut, true))
+                {
+                    g.SetClip(shape);
+                    using (var b = new SolidBrush(Color.FromArgb(Style.TitleAlpha, c))) g.FillRectangle(b, 0, 0, w, app.S(3));
+                    using (var fade = new LinearGradientBrush(new RectangleF(0, app.S(3), w, app.S(10)), Color.FromArgb(Style.TitleAlpha * 70 / 255, c), Color.FromArgb(0, c), 90f))
+                        g.FillRectangle(fade, 0, app.S(3), w, app.S(10));
+                    g.ResetClip();
+                }
+            }
+        }
+
+        void EnsureDib(int w, int h)
+        {
+            if (dib != IntPtr.Zero && dibW == w && dibH == h) return;
+            FreeDib();
+            var bi = new Native.BITMAPINFOHEADER { biSize = 40, biWidth = w, biHeight = -h, biPlanes = 1, biBitCount = 32 };
+            IntPtr screen = Native.GetDC(IntPtr.Zero);
+            dibDC = Native.CreateCompatibleDC(screen);
+            Native.ReleaseDC(IntPtr.Zero, screen);
+            dib = Native.CreateDIBSection(dibDC, ref bi, 0, out dibBits, IntPtr.Zero, 0);
+            if (dib == IntPtr.Zero || dibBits == IntPtr.Zero) { Native.DeleteDC(dibDC); dibDC = IntPtr.Zero; dib = IntPtr.Zero; return; }
+            dibOld = Native.SelectObject(dibDC, dib);
+            dibBmp = new Bitmap(w, h, w * 4, PixelFormat.Format32bppPArgb, dibBits);
+            dibW = w; dibH = h;
+        }
+
+        void FreeDib()
+        {
+            if (dibBmp != null) { dibBmp.Dispose(); dibBmp = null; }
+            if (dibDC != IntPtr.Zero)
+            {
+                if (dibOld != IntPtr.Zero) Native.SelectObject(dibDC, dibOld);
+                Native.DeleteDC(dibDC);
+            }
+            if (dib != IntPtr.Zero) Native.DeleteObject(dib);
+            dib = dibDC = dibOld = dibBits = IntPtr.Zero;
+            dibW = dibH = 0;
+        }
+
+        void PushLayered()
+        {
+            if (dibDC == IntPtr.Zero || !IsHandleCreated) return;
+            IntPtr screen = Native.GetDC(IntPtr.Zero);
             try
             {
-                hb = bmp.GetHbitmap(Color.FromArgb(0));
-                old = Native.SelectObject(mem, hb);
-                var size = new Native.SIZE { cx = bmp.Width, cy = bmp.Height };
+                var size = new Native.SIZE { cx = dibW, cy = dibH };
                 var src = new Native.POINT();
                 var blend = new Native.BLENDFUNCTION { BlendOp = 0, BlendFlags = 0, SourceConstantAlpha = (byte)curAlpha, AlphaFormat = 1 };
-                Native.UpdateLayeredWindow(Handle, screen, IntPtr.Zero, ref size, mem, ref src, 0, ref blend, 2 /*ULW_ALPHA*/);
+                Native.UpdateLayeredWindow(Handle, screen, IntPtr.Zero, ref size, dibDC, ref src, 0, ref blend, 2 /*ULW_ALPHA*/);
             }
-            finally
-            {
-                if (old != IntPtr.Zero) Native.SelectObject(mem, old);
-                if (hb != IntPtr.Zero) Native.DeleteObject(hb);
-                Native.DeleteDC(mem);
-                Native.ReleaseDC(IntPtr.Zero, screen);
-            }
+            finally { Native.ReleaseDC(IntPtr.Zero, screen); }
         }
 
         // ---------- Contenu ----------
@@ -2216,7 +2655,7 @@ namespace Logicapp
         NumericUpDown nuRadius, nuBorder;
         ColorButton cbBorder, cbBg, cbTitleText, cbTitleBar, cbLabel;
         Slider slBorderAlpha, slBgAlpha, slImgAlpha, slTitleAlpha, slIcon, slSpacing;
-        ComboBox cmbMode, cmbAlign;
+        ComboBox cmbMode, cmbAlign, cmbPreset, cmbAnim;
         FontButton fbTitle, fbLabel;
         CheckBox chkCount, chkShadow, chkSortDesc;
         Slider slIdle;
@@ -2250,8 +2689,15 @@ namespace Logicapp
             var t = NewTab(tabs, "Général");
             tbName = new TextBox { Width = S(260) };
             Row(t, "Nom de la zone", tbName);
+            cmbPreset = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = S(180) };
+            cmbPreset.Items.AddRange(ZoneStyle.PresetNames);
+            Row(t, "Style prédéfini", cmbPreset);
+            cmbAnim = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = S(180) };
+            cmbAnim.Items.AddRange(new object[] { "Désactivée", "Au survol", "Toujours (lente)" });
+            Row(t, "Animation RGB", cmbAnim);
+            Note(t, "Le style prédéfini applique couleurs, polices et forme : Néon RGB, Night City, Studio ou Classique. La taille des icônes, le tri et l'opacité au repos sont conservés, et tout reste personnalisable ensuite.");
             nuRadius = new NumericUpDown { Minimum = 0, Maximum = 40, Width = S(70) };
-            Row(t, "Coins arrondis (px)", nuRadius);
+            Row(t, "Coins : arrondi / coupe (px)", nuRadius);
             nuBorder = new NumericUpDown { Minimum = 0, Maximum = 10, Width = S(70) };
             Row(t, "Épaisseur de bordure", nuBorder);
             cbBorder = new ColorButton();
@@ -2338,6 +2784,16 @@ namespace Logicapp
             // Aperçu en direct
             EventHandler changed = delegate { OnChanged(); };
             nuRadius.ValueChanged += changed; nuBorder.ValueChanged += changed;
+            cmbAnim.SelectedIndexChanged += changed;
+            cmbPreset.SelectedIndexChanged += delegate
+            {
+                if (loading) return;
+                ReadControls();
+                st = ZoneStyle.Preset(cmbPreset.SelectedIndex, st);
+                LoadControls();
+                zone.ApplyStyle(st.Clone());
+                lblInfo.Text = "";
+            };
             foreach (var c in new[] { cbBorder, cbBg, cbTitleText, cbTitleBar, cbLabel }) c.ValueChanged += changed;
             foreach (var s in new[] { slBorderAlpha, slBgAlpha, slImgAlpha, slTitleAlpha, slIcon, slSpacing, slIdle }) s.ValueChanged += changed;
             cmbSort.SelectedIndexChanged += changed; chkSortDesc.CheckedChanged += changed;
@@ -2414,6 +2870,9 @@ namespace Logicapp
         {
             loading = true;
             tbName.Text = zone.ZoneName;
+            cmbPreset.SelectedIndex = st.Theme;
+            cmbAnim.SelectedIndex = st.RgbAnim;
+            cmbAnim.Enabled = st.Theme != 0;
             nuRadius.Value = Math.Max(0, Math.Min(40, st.CornerRadius));
             nuBorder.Value = Math.Max(0, Math.Min(10, st.BorderWidth));
             cbBorder.Value = st.BorderColor;
@@ -2443,6 +2902,8 @@ namespace Logicapp
 
         void ReadControls()
         {
+            st.Theme = Math.Max(0, cmbPreset.SelectedIndex);
+            st.RgbAnim = Math.Max(0, cmbAnim.SelectedIndex);
             st.CornerRadius = (int)nuRadius.Value;
             st.BorderWidth = (int)nuBorder.Value;
             st.BorderColor = cbBorder.Value;

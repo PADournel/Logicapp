@@ -10,8 +10,15 @@ A lightweight Windows 11 app that adds **collapsible zones** to your desktop for
 - **Collapsible**: click a zone's title to roll it up to its title bar (with an item count); hover a collapsed zone to peek inside.
 - **Fades when idle**: when the mouse leaves a zone, the whole zone quickly fades to 40% of its normal opacity (adjustable per zone, 100% disables it), and fades back in on hover.
 - **Sorting** (always on a grid): by name, by creation date (newest first), or free — drag an icon inside its zone to place it; the order is saved. "Reverse order" is available for name/date.
+- **Gamer style presets** with cyberpunk cut corners and RGB animations:
+  - **Néon RGB** (default): dark glass, rotating rainbow border, scrolling RGB line under the title
+  - **Night City**: cyan beveled title tab, magenta accents, scanlines, a sweeping light beam
+  - **Studio**: sober dark card with an accent line that slowly shifts color
+  - **Classique**: the original rounded look
+  - Animations run smoothly only while the mouse is over a zone (or very slowly in "always" mode), so the app stays at ~0% CPU when idle
 - **Appearance settings** (gear icon in each title bar), with live preview:
-  - zone name, corner radius, border width / color / opacity
+  - style preset, RGB animation (off / on hover / always, slow)
+  - zone name, corner radius or cut size, border width / color / opacity
   - background color with adjustable opacity, or a background image (fill, fit, stretch, tile, center) with its own opacity
   - title font, text color, bar color / opacity, alignment, item count when collapsed
   - icon size (16–128 px), spacing, label font / color, label shadow
