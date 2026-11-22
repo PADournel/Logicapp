@@ -819,16 +819,32 @@ namespace Logicapp
                 {
                     if (k == null || k.GetValue(OldAppName) == null) return false;
                     k.DeleteValue(OldAppName, false);
-                    return true;
                 }
+                using (var a = Registry.CurrentUser.OpenSubKey(ApprovedKey, true))
+                    if (a != null) a.DeleteValue(OldAppName, false);
+                return true;
             }
             catch { return false; }
+        }
+
+        // Windows ne lance une entrée « Run » que si elle est approuvée dans la liste des applis de démarrage
+        // (StartupApproved\Run : 02 = activée, 03 = désactivée par l'utilisateur dans le Gestionnaire des tâches).
+        const string ApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
+
+        static bool IsDisabledInTaskManager()
+        {
+            using (var a = Registry.CurrentUser.OpenSubKey(ApprovedKey))
+            {
+                var b = a == null ? null : a.GetValue(AppName) as byte[];
+                return b != null && b.Length > 0 && (b[0] & 1) != 0;
+            }
         }
 
         static bool IsStartupEnabled()
         {
             using (var k = Registry.CurrentUser.OpenSubKey(RunKey))
-                return k != null && k.GetValue(AppName) != null;
+                if (k == null || k.GetValue(AppName) == null) return false;
+            return !IsDisabledInTaskManager();
         }
 
         static void SetStartup(bool on)
@@ -839,6 +855,11 @@ namespace Logicapp
                 {
                     if (on) k.SetValue(AppName, "\"" + Application.ExecutablePath + "\"");
                     else k.DeleteValue(AppName, false);
+                }
+                using (var a = Registry.CurrentUser.CreateSubKey(ApprovedKey))
+                {
+                    if (on) a.SetValue(AppName, new byte[] { 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, RegistryValueKind.Binary);
+                    else a.DeleteValue(AppName, false);
                 }
             }
             catch { }
