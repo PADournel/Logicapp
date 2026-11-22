@@ -378,6 +378,8 @@ namespace Logicapp
         public int TitleAlign = 0;    // 0 Gauche, 1 Centre, 2 Droite
         public bool LabelShadow = true, ShowCount = true;
         public int IdleOpacity = 40;  // opacité de toute la zone (%) quand la souris n'est pas dessus
+        public int SortMode = 0;      // 0 Nom, 1 Date de création, 2 Libre (rangement à la souris)
+        public bool SortDesc = false; // ordre inverse (Nom / Date)
         public string BgImage = "";
         public string LabelFont = "Segoe UI|9|0", TitleFont = "Segoe UI Semibold|9.5|0";
         public Color LabelColor = Color.White;
@@ -399,7 +401,7 @@ namespace Logicapp
             W(sb, "TitleAlign", TitleAlign); W(sb, "ShowCount", ShowCount ? 1 : 0);
             W(sb, "CornerRadius", CornerRadius); W(sb, "BorderWidth", BorderWidth);
             W(sb, "BorderColor", Hex(BorderColor)); W(sb, "BorderAlpha", BorderAlpha);
-            W(sb, "IdleOpacity", IdleOpacity);
+            W(sb, "IdleOpacity", IdleOpacity); W(sb, "SortMode", SortMode); W(sb, "SortDesc", SortDesc ? 1 : 0);
         }
 
         public bool Read(string k, string v)
@@ -427,6 +429,8 @@ namespace Logicapp
                 case "BorderColor": BorderColor = C(v, BorderColor); return true;
                 case "BorderAlpha": BorderAlpha = I(v, BorderAlpha, 0, 255); return true;
                 case "IdleOpacity": IdleOpacity = I(v, IdleOpacity, 10, 100); return true;
+                case "SortMode": SortMode = I(v, SortMode, 0, 2); return true;
+                case "SortDesc": SortDesc = v == "1"; return true;
             }
             return false;
         }
@@ -498,7 +502,7 @@ namespace Logicapp
         const string AppName = "Logicapp";
         const string OldAppName = "BureauZones"; // ancien nom (avant le renommage)
 
-        class ZoneRec { public string Name; public int X, Y, W = 320, H = 220; public bool Collapsed; public ZoneStyle Style; }
+        class ZoneRec { public string Name, Order = ""; public int X, Y, W = 320, H = 220; public bool Collapsed; public ZoneStyle Style; }
 
         public ZoneApp()
         {
@@ -623,6 +627,7 @@ namespace Logicapp
                             case "Width": if (int.TryParse(v, out n)) cur.W = n; break;
                             case "Height": if (int.TryParse(v, out n)) cur.H = n; break;
                             case "Collapsed": cur.Collapsed = v == "1"; break;
+                            case "Order": cur.Order = v; break;
                             default: cur.Style.Read(k, v); break;
                         }
                     }
@@ -633,7 +638,7 @@ namespace Logicapp
             {
                 string name = Sanitize(r.Name ?? "");
                 if (name.Length == 0 || !seen.Add(name)) continue;
-                AddZone(name, new Rectangle(r.X, r.Y, r.W, r.H), r.Collapsed, r.Style);
+                AddZone(name, new Rectangle(r.X, r.Y, r.W, r.H), r.Collapsed, r.Style, r.Order);
             }
             // Dossiers ajoutés à la main dans « Zones du bureau » : on en fait des zones aussi.
             foreach (string dir in Directory.GetDirectories(Root))
@@ -642,7 +647,7 @@ namespace Logicapp
                 if (seen.Contains(n) || n.StartsWith(".")) continue;
                 if ((File.GetAttributes(dir) & (FileAttributes.Hidden | FileAttributes.System)) != 0) continue;
                 seen.Add(n);
-                AddZone(n, DefaultBounds(Zones.Count), false, DefaultStyle.Clone());
+                AddZone(n, DefaultBounds(Zones.Count), false, DefaultStyle.Clone(), "");
             }
             if (Zones.Count == 0 && createDefault) NewZone(false);
             miLock.Checked = Locked;
@@ -650,9 +655,9 @@ namespace Logicapp
             Save();
         }
 
-        void AddZone(string name, Rectangle r, bool collapsed, ZoneStyle style)
+        void AddZone(string name, Rectangle r, bool collapsed, ZoneStyle style, string order)
         {
-            var z = new ZoneForm(name, EnsureVisible(r), collapsed, style);
+            var z = new ZoneForm(name, EnsureVisible(r), collapsed, style, order);
             Zones.Add(z);
             z.Show();
         }
@@ -689,7 +694,7 @@ namespace Logicapp
             Rectangle r;
             if (atCursor) { Point c = Cursor.Position; r = new Rectangle(c.X - w / 2, c.Y - S(12), w, h); }
             else r = DefaultBounds(Zones.Count);
-            AddZone(n, Clamp(r), false, DefaultStyle.Clone());
+            AddZone(n, Clamp(r), false, DefaultStyle.Clone(), "");
             Save();
         }
 
@@ -720,6 +725,7 @@ namespace Logicapp
                 sb.AppendLine("Width=" + z.Width);
                 sb.AppendLine("Height=" + z.ExpandedHeight);
                 sb.AppendLine("Collapsed=" + (z.Collapsed ? "1" : "0"));
+                sb.AppendLine("Order=" + z.OrderString); // ordre libre (noms de fichiers séparés par |)
                 z.Style.Write(sb);
             }
             try
@@ -862,9 +868,11 @@ namespace Logicapp
 
         // Déplace (ou copie) des fichiers/dossiers vers destDir, via les opérations de fichiers de Windows
         // (barre de progression, demande d'autorisation administrateur si nécessaire).
-        public void MoveInto(IEnumerable<string> items, string destDir, bool copy)
+        // Renvoie les chemins de destination des éléments effectivement déplacés/copiés.
+        public List<string> MoveInto(IEnumerable<string> items, string destDir, bool copy)
         {
             var errors = new List<string>();
+            var done = new List<string>();
             string dd = destDir.TrimEnd('\\');
             foreach (string raw in items)
             {
@@ -887,12 +895,14 @@ namespace Logicapp
                         if (copy) VBFS.FileSystem.CopyFile(src, dest, VBFS.UIOption.OnlyErrorDialogs);
                         else VBFS.FileSystem.MoveFile(src, dest, VBFS.UIOption.OnlyErrorDialogs);
                     }
+                    if (File.Exists(dest) || Directory.Exists(dest)) done.Add(dest);
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception ex) { errors.Add(Path.GetFileName(src) + " : " + ex.Message); }
             }
             if (errors.Count > 0)
                 Dialogs.Error("Certains éléments n'ont pas pu être déplacés :\n\n" + string.Join("\n", errors.ToArray()));
+            return done;
         }
     }
 
@@ -908,7 +918,7 @@ namespace Logicapp
         public int ItemCount { get { return items.Count; } }
         public bool IsOpen { get { return !Collapsed || peeking; } }
 
-        class Item { public string FullPath, Name; public bool IsDir; public Bitmap Icon; public Rectangle Cell; }
+        class Item { public string FullPath, Name; public bool IsDir; public DateTime Created; public Bitmap Icon; public Rectangle Cell; }
         enum DragMode { None, Title, Gear, Item, Band, Scroll }
 
         readonly List<Item> items = new List<Item>();
@@ -932,10 +942,16 @@ namespace Logicapp
         // Opacité globale (fondu rapide au survol)
         readonly Timer fadeTimer;
         int curAlpha = 255;
-        bool renaming;
+        bool renaming, selfDragging;
 
-        public ZoneForm(string name, Rectangle bounds, bool collapsed, ZoneStyle style)
+        // Ordre libre : noms de fichiers dans l'ordre choisi à la souris
+        List<string> order = new List<string>();
+        int lastCols = 1, lastCw = 1, lastCellH = 1, dropIndex = -1;
+        public string OrderString { get { return string.Join("|", order.ToArray()); } }
+
+        public ZoneForm(string name, Rectangle bounds, bool collapsed, ZoneStyle style, string orderStr)
         {
+            foreach (string n in (orderStr ?? "").Split('|')) if (n.Length > 0) order.Add(n);
             var app = ZoneApp.I;
             ZoneName = name;
             Folder = Path.Combine(app.Root, name);
@@ -975,7 +991,7 @@ namespace Logicapp
         {
             get
             {
-                return mouseInside || drag != DragMode.None || dropHover || renaming || menu.Visible ||
+                return mouseInside || drag != DragMode.None || dropHover || selfDragging || renaming || menu.Visible ||
                        (settingsForm != null && !settingsForm.IsDisposed);
             }
         }
@@ -1045,16 +1061,107 @@ namespace Logicapp
         {
             bool icons = Style.IconSize != s.IconSize;
             bool bg = Style.BgImage != s.BgImage || Style.BgImageMode != s.BgImageMode || Style.BgImageAlpha != s.BgImageAlpha;
+            bool sort = Style.SortMode != s.SortMode || Style.SortDesc != s.SortDesc;
+            if (s.SortMode == 2 && Style.SortMode != 2)
+            {
+                order.Clear(); // passage en libre : on part de l'ordre affiché
+                foreach (var it in items) order.Add(Path.GetFileName(it.FullPath));
+            }
             Style = s;
             CreateFonts();
             MinimumSize = new Size(ZoneApp.I.S(140), titleH);
             if (ExpandedHeight < titleH + ZoneApp.I.S(60)) ExpandedHeight = titleH + ZoneApp.I.S(60);
             if (!IsOpen) Height = titleH;
             if (icons) Reload();
+            else if (sort) SortItems();
             if (bg) BuildBgCache();
             LayoutItems();
             Render();
             UpdateFade();
+        }
+
+        // ---------- Tri ----------
+
+        void SortItems()
+        {
+            var cmpName = StringComparer.CurrentCultureIgnoreCase;
+            if (Style.SortMode == 2)
+            {
+                // Libre : ordre enregistré ; les nouveaux éléments vont à la fin (par nom).
+                var pos = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < order.Count; i++) if (!pos.ContainsKey(order[i])) pos[order[i]] = i;
+                items.Sort((x, y) =>
+                {
+                    int px, py;
+                    bool hx = pos.TryGetValue(Path.GetFileName(x.FullPath), out px), hy = pos.TryGetValue(Path.GetFileName(y.FullPath), out py);
+                    if (hx && hy) return px.CompareTo(py);
+                    if (hx != hy) return hx ? -1 : 1;
+                    return cmpName.Compare(x.Name, y.Name);
+                });
+                var newOrder = new List<string>();
+                foreach (var it in items) newOrder.Add(Path.GetFileName(it.FullPath));
+                bool changed = string.Join("|", newOrder.ToArray()) != OrderString;
+                order = newOrder;
+                if (changed && ZoneApp.I.Zones.Contains(this)) ZoneApp.I.Save();
+                return;
+            }
+            if (Style.SortMode == 1)
+                items.Sort((x, y) => x.Created != y.Created ? y.Created.CompareTo(x.Created) : cmpName.Compare(x.Name, y.Name)); // récents d'abord
+            else
+                items.Sort((x, y) => x.IsDir != y.IsDir ? (x.IsDir ? -1 : 1) : cmpName.Compare(x.Name, y.Name));
+            if (Style.SortDesc) items.Reverse();
+        }
+
+        public void SetSort(int mode, bool desc)
+        {
+            if (mode == 2 && Style.SortMode != 2)
+            {
+                // Passage en libre : on part de l'ordre affiché actuellement.
+                order.Clear();
+                foreach (var it in items) order.Add(Path.GetFileName(it.FullPath));
+            }
+            Style.SortMode = mode;
+            Style.SortDesc = desc;
+            SortItems();
+            LayoutItems();
+            Render();
+            ZoneApp.I.Save();
+        }
+
+        // Rang d'insertion (dans la grille) correspondant à un point de la zone.
+        int DropIndexAt(Point p)
+        {
+            if (items.Count == 0) return 0;
+            Rectangle cr = ContentRect;
+            int x = Math.Max(0, p.X - cr.X), y = Math.Max(0, p.Y - cr.Y + scrollY);
+            int row = y / Math.Max(1, lastCellH);
+            int col = Math.Min(lastCols - 1, x / Math.Max(1, lastCw));
+            bool after = (x - col * lastCw) > lastCw / 2;
+            return Math.Max(0, Math.Min(items.Count, row * lastCols + col + (after ? 1 : 0)));
+        }
+
+        // Range les fichiers déplacés (déjà dans la zone) à la position voulue, en mode libre.
+        void ReorderTo(IList<string> paths, int index)
+        {
+            if (Style.SortMode != 2) SetSort(2, false);
+            var moving = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string p in paths) moving.Add(Path.GetFileName(p.TrimEnd('\\')));
+            var movingOrdered = new List<string>();
+            var rest = new List<string>();
+            int insertAt = 0;
+            for (int k = 0; k < items.Count; k++)
+            {
+                string n = Path.GetFileName(items[k].FullPath);
+                if (moving.Contains(n)) movingOrdered.Add(n);
+                else { rest.Add(n); if (k < index) insertAt++; }
+            }
+            foreach (string n in moving) if (!movingOrdered.Contains(n)) movingOrdered.Add(n); // éléments tout juste arrivés
+            rest.InsertRange(Math.Min(insertAt, rest.Count), movingOrdered);
+            order = rest;
+            SortItems();
+            LayoutItems();
+            Render();
+            ZoneApp.I.Save();
         }
 
         // ---------- Fenêtre ----------
@@ -1251,6 +1358,7 @@ namespace Logicapp
             if (cols == 1) cw = Math.Max(1, width);
             for (int i = 0; i < items.Count; i++)
                 items[i].Cell = new Rectangle(cr.X + (i % cols) * cw, cr.Y + (i / cols) * cs.Height, cw, cs.Height);
+            lastCols = cols; lastCw = cw; lastCellH = cs.Height;
             int rows = (items.Count + cols - 1) / cols;
             return rows * cs.Height;
         }
@@ -1459,6 +1567,24 @@ namespace Logicapp
                             g.DrawString(items[i].Name, labelFont, lb, lr, sf);
                         }
                     }
+                    // Repère d'insertion (rangement libre par glisser-déposer)
+                    if (dropIndex >= 0)
+                    {
+                        Rectangle refCell;
+                        int xLine;
+                        if (items.Count == 0) { refCell = new Rectangle(cr.X, cr.Y, lastCw, lastCellH); xLine = cr.X + app.S(2); }
+                        else if (dropIndex < items.Count)
+                        {
+                            refCell = CellRect(dropIndex);
+                            xLine = refCell.X;
+                            // Début de ligne : le repère reste dans la zone
+                            if (dropIndex % lastCols == 0) xLine += app.S(2);
+                        }
+                        else { refCell = CellRect(items.Count - 1); xLine = refCell.Right - app.S(2); }
+                        float lw = app.S(3);
+                        using (var pen = new Pen(Color.FromArgb(240, 60, 150, 255), lw) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                            g.DrawLine(pen, xLine, refCell.Y + app.S(6), xLine, refCell.Bottom - app.S(6));
+                    }
                     // Ascenseur
                     Rectangle thumb = ThumbRect;
                     if (!thumb.IsEmpty)
@@ -1558,17 +1684,22 @@ namespace Logicapp
                         FullPath = p,
                         IsDir = (a & FileAttributes.Directory) != 0,
                         Name = string.IsNullOrEmpty(dn) ? Path.GetFileName(p) : dn,
+                        Created = SafeCreated(p),
                         Icon = ic
                     });
                 }
             }
             catch { }
-            items.Sort((x, y) => x.IsDir != y.IsDir ? (x.IsDir ? -1 : 1)
-                : string.Compare(x.Name, y.Name, StringComparison.CurrentCultureIgnoreCase));
+            SortItems();
             selected.RemoveWhere(s => !items.Exists(it => string.Equals(it.FullPath, s, StringComparison.OrdinalIgnoreCase)));
             hover = -1;
             LayoutItems();
             Render();
+        }
+
+        static DateTime SafeCreated(string p)
+        {
+            try { return File.GetCreationTime(p); } catch { return DateTime.MinValue; }
         }
 
         List<string> SelectedPaths()
@@ -1650,6 +1781,8 @@ namespace Logicapp
             {
                 if (isDir) Directory.Move(old, np); else File.Move(old, np);
                 selected.Clear(); selected.Add(np);
+                int oi = order.FindIndex(n => string.Equals(n, Path.GetFileName(old), StringComparison.OrdinalIgnoreCase));
+                if (oi >= 0) order[oi] = Path.GetFileName(np); // garde sa place en mode libre
             }
             catch (Exception ex) { Dialogs.Error("Impossible de renommer : " + ex.Message); }
             Reload();
@@ -1844,9 +1977,19 @@ namespace Logicapp
             if (sc.Count == 0) return;
             var data = new DataObject();
             data.SetFileDropList(sc);
-            DoDragDrop(data, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+            selfDragging = true;
+            try { DoDragDrop(data, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link); }
+            finally { selfDragging = false; dropIndex = -1; }
             QueueReload();
             RefreshMouseInside();
+        }
+
+        void UpdateDropIndex(DragEventArgs e)
+        {
+            int idx = -1;
+            if (IsOpen && (selfDragging || Style.SortMode == 2))
+                idx = DropIndexAt(PointToClient(new Point(e.X, e.Y)));
+            if (idx != dropIndex) { dropIndex = idx; Render(); }
         }
 
         static DragDropEffects EffectFor(DragEventArgs e)
@@ -1861,10 +2004,11 @@ namespace Logicapp
         protected override void OnDragEnter(DragEventArgs e)
         {
             base.OnDragEnter(e);
-            e.Effect = EffectFor(e);
+            e.Effect = selfDragging ? DragDropEffects.Move : EffectFor(e);
             if (e.Effect == DragDropEffects.None) return;
             StartPeek();
-            dropHover = true;
+            dropHover = !selfDragging; // bordure bleue seulement pour ce qui vient de l'extérieur
+            UpdateDropIndex(e);
             Render();
             UpdateFade();
         }
@@ -1872,13 +2016,15 @@ namespace Logicapp
         protected override void OnDragOver(DragEventArgs e)
         {
             base.OnDragOver(e);
-            e.Effect = EffectFor(e);
+            e.Effect = selfDragging ? DragDropEffects.Move : EffectFor(e);
+            UpdateDropIndex(e);
         }
 
         protected override void OnDragLeave(EventArgs e)
         {
             base.OnDragLeave(e);
             dropHover = false;
+            dropIndex = -1;
             Render();
             UpdateFade();
         }
@@ -1886,15 +2032,25 @@ namespace Logicapp
         protected override void OnDragDrop(DragEventArgs e)
         {
             base.OnDragDrop(e);
+            int idx = dropIndex >= 0 ? dropIndex : items.Count;
             dropHover = false;
+            dropIndex = -1;
             Render();
             var files = e.Data.GetData(DataFormats.FileDrop) as string[];
             if (files == null) return;
+            if (selfDragging)
+            {
+                // Glisser à l'intérieur de la zone : on range l'icône à cet endroit (passe en tri libre).
+                ReorderTo(files, idx);
+                return;
+            }
             bool copy = e.Effect == DragDropEffects.Copy;
+            bool free = Style.SortMode == 2;
             BeginInvoke(new Action(delegate // hors du glisser-déposer pour libérer la source
             {
-                ZoneApp.I.MoveInto(files, Folder, copy);
+                var dests = ZoneApp.I.MoveInto(files, Folder, copy);
                 Reload();
+                if (free && dests.Count > 0) ReorderTo(dests, idx);
                 UpdateFade();
             }));
         }
@@ -1920,6 +2076,21 @@ namespace Logicapp
                 menu.Items.Add(new ToolStripSeparator());
             }
             Add("Apparence…", OpenSettings);
+            var sortMenu = new ToolStripMenuItem("Trier les icônes");
+            string[] sortNames = { "Par nom", "Par date de création", "Libre (glisser pour ranger)" };
+            for (int m = 0; m < 3; m++)
+            {
+                int mode = m;
+                var mi = new ToolStripMenuItem(sortNames[m], null, delegate { SetSort(mode, mode == 2 ? false : Style.SortDesc); });
+                mi.Checked = Style.SortMode == m;
+                sortMenu.DropDownItems.Add(mi);
+            }
+            sortMenu.DropDownItems.Add(new ToolStripSeparator());
+            var rev = new ToolStripMenuItem("Ordre inverse", null, delegate { SetSort(Style.SortMode, !Style.SortDesc); });
+            rev.Checked = Style.SortDesc;
+            rev.Enabled = Style.SortMode != 2;
+            sortMenu.DropDownItems.Add(rev);
+            menu.Items.Add(sortMenu);
             Add(peeking ? "Garder la zone dépliée" : (Collapsed ? "Déplier la zone" : "Replier la zone"), ToggleCollapse);
             Add("Renommer la zone…", delegate
             {
@@ -2016,8 +2187,9 @@ namespace Logicapp
         Slider slBorderAlpha, slBgAlpha, slImgAlpha, slTitleAlpha, slIcon, slSpacing;
         ComboBox cmbMode, cmbAlign;
         FontButton fbTitle, fbLabel;
-        CheckBox chkCount, chkShadow;
+        CheckBox chkCount, chkShadow, chkSortDesc;
         Slider slIdle;
+        ComboBox cmbSort;
         Label lblInfo;
 
         static int S(int v) { return ZoneApp.I.S(v); }
@@ -2106,6 +2278,11 @@ namespace Logicapp
             Row(t, "Couleur des noms", cbLabel);
             chkShadow = new CheckBox { Text = "Ombre sous les noms (meilleure lisibilité)", AutoSize = true };
             Row(t, "", chkShadow);
+            cmbSort = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = S(220) };
+            cmbSort.Items.AddRange(new object[] { "Par nom (alphabétique)", "Par date de création", "Libre (glisser pour ranger)" });
+            Row(t, "Tri des icônes", cmbSort);
+            chkSortDesc = new CheckBox { Text = "Ordre inverse (Z → A, ou plus anciens d'abord)", AutoSize = true };
+            Row(t, "", chkSortDesc);
 
             // --- Boutons ---
             int by = S(422);
@@ -2132,6 +2309,7 @@ namespace Logicapp
             nuRadius.ValueChanged += changed; nuBorder.ValueChanged += changed;
             foreach (var c in new[] { cbBorder, cbBg, cbTitleText, cbTitleBar, cbLabel }) c.ValueChanged += changed;
             foreach (var s in new[] { slBorderAlpha, slBgAlpha, slImgAlpha, slTitleAlpha, slIcon, slSpacing, slIdle }) s.ValueChanged += changed;
+            cmbSort.SelectedIndexChanged += changed; chkSortDesc.CheckedChanged += changed;
             cmbMode.SelectedIndexChanged += changed; cmbAlign.SelectedIndexChanged += changed;
             fbTitle.ValueChanged += changed; fbLabel.ValueChanged += changed;
             chkCount.CheckedChanged += changed; chkShadow.CheckedChanged += changed;
@@ -2226,6 +2404,9 @@ namespace Logicapp
             cbLabel.Value = st.LabelColor;
             chkShadow.Checked = st.LabelShadow;
             slIdle.Value = st.IdleOpacity;
+            cmbSort.SelectedIndex = st.SortMode;
+            chkSortDesc.Checked = st.SortDesc;
+            chkSortDesc.Enabled = st.SortMode != 2;
             loading = false;
         }
 
@@ -2252,6 +2433,9 @@ namespace Logicapp
             st.LabelColor = cbLabel.Value;
             st.LabelShadow = chkShadow.Checked;
             st.IdleOpacity = slIdle.Value;
+            st.SortMode = Math.Max(0, cmbSort.SelectedIndex);
+            st.SortDesc = st.SortMode != 2 && chkSortDesc.Checked;
+            chkSortDesc.Enabled = st.SortMode != 2;
         }
 
         static TableLayoutPanel NewTab(TabControl tabs, string title)
