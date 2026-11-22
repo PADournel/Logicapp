@@ -20,6 +20,16 @@ using System.Text;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using VBFS = Microsoft.VisualBasic.FileIO;
+using System.Reflection;
+
+// Informations affichées dans les propriétés du fichier et la colonne « Éditeur » du Gestionnaire des tâches.
+[assembly: AssemblyTitle("Logicapp")]
+[assembly: AssemblyDescription("Logicapp — zones repliables pour le bureau")]
+[assembly: AssemblyCompany("OnTrack Software")]
+[assembly: AssemblyProduct("Logicapp")]
+[assembly: AssemblyCopyright("© 2026 OnTrack Software")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 namespace Logicapp
 {

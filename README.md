@@ -1,5 +1,7 @@
 # Logicapp
 
+*by OnTrack Software*
+
 A lightweight Windows 11 app that adds **collapsible zones** to your desktop for organizing icons — a small, dependency-free alternative to tools like Fences.
 
 ## Features
