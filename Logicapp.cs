@@ -2680,9 +2680,9 @@ namespace Logicapp
             AutoScaleMode = AutoScaleMode.None;
             Font = new Font("Segoe UI", 9f);
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
-            ClientSize = new Size(S(500), S(470));
+            ClientSize = new Size(S(520), S(600));
 
-            var tabs = new TabControl { Location = new Point(S(10), S(10)), Size = new Size(S(480), S(400)) };
+            var tabs = new TabControl { Location = new Point(S(10), S(10)), Size = new Size(S(500), S(522)) };
             Controls.Add(tabs);
 
             // --- Général ---
@@ -2706,7 +2706,7 @@ namespace Logicapp
             Row(t, "Opacité de bordure", slBorderAlpha);
             slIdle = new Slider(10, 100, Pct);
             Row(t, "Opacité sans la souris", slIdle);
-            Note(t, "Quand la souris quitte la zone, toute la zone (fond, icônes, textes)\npasse à ce pourcentage de son opacité normale, avec un fondu rapide.\n100 % = pas d'effet.");
+            Note(t, "Quand la souris quitte la zone, toute la zone (fond, icônes, textes) passe à ce pourcentage de son opacité normale, avec un fondu rapide. 100 % = pas d'effet.");
 
             // --- Fond ---
             t = NewTab(tabs, "Fond");
@@ -2725,7 +2725,7 @@ namespace Logicapp
             Row(t, "Disposition de l'image", cmbMode);
             slImgAlpha = new Slider(0, 100, Pct);
             Row(t, "Opacité de l'image", slImgAlpha);
-            Note(t, "Astuce : opacité du fond à 0 % + une image = image seule.\nL'opacité ne touche que le fond : icônes et textes restent nets.");
+            Note(t, "Astuce : opacité du fond à 0 % + une image = image seule. L'opacité ne touche que le fond : icônes et textes restent nets.");
 
             // --- Titre ---
             t = NewTab(tabs, "Titre");
@@ -2762,12 +2762,12 @@ namespace Logicapp
             Row(t, "", chkSortDesc);
 
             // --- Boutons ---
-            int by = S(422);
+            int by = S(544);
             var btnAll = new Button { Text = "Appliquer à toutes les zones", AutoSize = true, Location = new Point(S(10), by) };
             var btnReset = new Button { Text = "Réinitialiser", AutoSize = true, Location = new Point(S(200), by) };
-            var btnOk = new Button { Text = "OK", Size = new Size(S(80), S(28)), Location = new Point(S(320), by) };
-            var btnCancel = new Button { Text = "Annuler", Size = new Size(S(80), S(28)), Location = new Point(S(408), by), DialogResult = DialogResult.Cancel };
-            lblInfo = new Label { AutoSize = true, ForeColor = Color.SeaGreen, Location = new Point(S(12), S(452)) };
+            var btnOk = new Button { Text = "OK", Size = new Size(S(80), S(28)), Location = new Point(S(342), by) };
+            var btnCancel = new Button { Text = "Annuler", Size = new Size(S(80), S(28)), Location = new Point(S(430), by), DialogResult = DialogResult.Cancel };
+            lblInfo = new Label { AutoSize = true, ForeColor = Color.SeaGreen, Location = new Point(S(12), S(578)) };
             Controls.AddRange(new Control[] { btnAll, btnReset, btnOk, btnCancel, lblInfo });
             AcceptButton = btnOk;
             CancelButton = btnCancel;
@@ -2960,7 +2960,9 @@ namespace Logicapp
         {
             int r = t.RowCount++;
             t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            var l = new Label { Text = text, AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(0, S(12), 0, 0) };
+            // Retour à la ligne automatique dans la largeur de l'onglet (le texte ne sort jamais du cadre)
+            var l = new Label { Text = text, AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(0, S(8), 0, S(6)),
+                                MaximumSize = new Size(S(450), 0) };
             t.Controls.Add(l, 0, r);
             t.SetColumnSpan(l, 2);
         }
