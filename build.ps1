@@ -1,4 +1,4 @@
-# Compile BureauZones.exe avec le compilateur C# fourni avec Windows (aucune installation requise).
+﻿# Compile Logicapp.exe avec le compilateur C# fourni avec Windows (aucune installation requise).
 $ErrorActionPreference = 'Stop'
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Add-Type -AssemblyName System.Drawing
@@ -55,12 +55,12 @@ foreach ($p in $pngs) { $bw.Write($p) }
 [System.IO.File]::WriteAllBytes("$dir\icon.ico", $ms.ToArray())
 
 # Arrête l'app si elle tourne, puis compile
-Get-Process BureauZones -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process Logicapp, BureauZones -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 300
 $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 & $csc /nologo /target:winexe /optimize+ /codepage:65001 `
     "/win32icon:$dir\icon.ico" "/win32manifest:$dir\app.manifest" `
     /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:Microsoft.VisualBasic.dll `
-    "/out:$dir\BureauZones.exe" "$dir\BureauZones.cs"
+    "/out:$dir\Logicapp.exe" "$dir\Logicapp.cs"
 if ($LASTEXITCODE -ne 0) { throw "Échec de la compilation" }
-Write-Host "OK : $dir\BureauZones.exe"
+Write-Host "OK : $dir\Logicapp.exe"

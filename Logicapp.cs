@@ -1,4 +1,4 @@
-// Zones du bureau — zones repliables pour ranger les icônes du bureau.
+// Logicapp — zones repliables pour ranger les icônes du bureau.
 // Compilé avec le compilateur C# intégré à Windows (.NET Framework 4.8) : aucune dépendance.
 // Chaque zone est un vrai dossier (à côté du dossier Bureau) ; glisser une icône dedans la déplace.
 // Les zones sont dessinées entièrement par l'app (fenêtres à transparence par pixel) :
@@ -21,7 +21,7 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 using VBFS = Microsoft.VisualBasic.FileIO;
 
-namespace BureauZones
+namespace Logicapp
 {
     static class Program
     {
@@ -29,7 +29,7 @@ namespace BureauZones
         static void Main()
         {
             bool created;
-            using (var mutex = new System.Threading.Mutex(true, "BureauZones_Instance_Unique", out created))
+            using (var mutex = new System.Threading.Mutex(true, "Logicapp_Instance_Unique", out created))
             {
                 if (!created) return;
                 // Une erreur ne doit jamais fermer l'app : on la note dans erreurs.log et on continue.
@@ -440,7 +440,8 @@ namespace BureauZones
         int fgTicks;
 
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        const string AppName = "BureauZones";
+        const string AppName = "Logicapp";
+        const string OldAppName = "BureauZones"; // ancien nom (avant le renommage)
 
         class ZoneRec { public string Name; public int X, Y, W = 320, H = 220; public bool Collapsed; public ZoneStyle Style; }
 
@@ -457,12 +458,13 @@ namespace BureauZones
             using (var g = Graphics.FromHwnd(IntPtr.Zero)) Scale = g.DpiX / 96f;
 
             firstRun = !File.Exists(ConfigPath);
-            if (firstRun || IsStartupEnabled()) SetStartup(true); // (re)écrit le chemin de l'exe
+            bool migrated = RemoveOldStartup(); // ancienne entrée « BureauZones » -> « Logicapp »
+            if (firstRun || migrated || IsStartupEnabled()) SetStartup(true); // (re)écrit le chemin de l'exe
 
             tray = new NotifyIcon();
             try { tray.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
             catch { tray.Icon = SystemIcons.Application; }
-            tray.Text = "Zones du bureau";
+            tray.Text = "Logicapp";
             tray.ContextMenuStrip = BuildTrayMenu();
             tray.Visible = true;
 
@@ -505,7 +507,7 @@ namespace BureauZones
             if (firstRun)
             {
                 firstRun = false;
-                tray.ShowBalloonTip(10000, "Zones du bureau",
+                tray.ShowBalloonTip(10000, "Logicapp",
                     "Glissez des icônes du bureau dans une zone.\nClic sur le titre : replier / déplier.\nRoue crantée : apparence de la zone.",
                     ToolTipIcon.Info);
             }
@@ -646,7 +648,7 @@ namespace BureauZones
         public void Save()
         {
             var sb = new StringBuilder();
-            sb.AppendLine("# Zones du bureau — configuration (rechargée à chaque démarrage)");
+            sb.AppendLine("# Logicapp — configuration des zones (rechargée à chaque démarrage)");
             sb.AppendLine("[Global]");
             sb.AppendLine("Locked=" + (Locked ? "1" : "0"));
             sb.AppendLine("PeekOnHover=" + (PeekOnHover ? "1" : "0"));
@@ -746,6 +748,20 @@ namespace BureauZones
                 try { Native.EmptyWorkingSet(Process.GetCurrentProcess().Handle); } catch { }
             };
             t.Start();
+        }
+
+        static bool RemoveOldStartup()
+        {
+            try
+            {
+                using (var k = Registry.CurrentUser.OpenSubKey(RunKey, true))
+                {
+                    if (k == null || k.GetValue(OldAppName) == null) return false;
+                    k.DeleteValue(OldAppName, false);
+                    return true;
+                }
+            }
+            catch { return false; }
         }
 
         static bool IsStartupEnabled()
@@ -2255,7 +2271,7 @@ namespace BureauZones
                 }
                 catch (ArgumentException)
                 {
-                    MessageBox.Show(FindForm(), "Cette police n'est pas prise en charge (polices TrueType/OpenType uniquement).", "Zones du bureau");
+                    MessageBox.Show(FindForm(), "Cette police n'est pas prise en charge (polices TrueType/OpenType uniquement).", "Logicapp");
                 }
             }
         }
@@ -2319,14 +2335,14 @@ namespace BureauZones
         public static bool Confirm(string text)
         {
             using (var o = TopOwner())
-                return MessageBox.Show(o, text, "Zones du bureau", MessageBoxButtons.OKCancel,
+                return MessageBox.Show(o, text, "Logicapp", MessageBoxButtons.OKCancel,
                     MessageBoxIcon.Question) == DialogResult.OK;
         }
 
         public static void Error(string text)
         {
             using (var o = TopOwner())
-                MessageBox.Show(o, text, "Zones du bureau", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(o, text, "Logicapp", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         public static string Input(string caption, string prompt, string initial)

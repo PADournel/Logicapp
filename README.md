@@ -32,7 +32,7 @@ No SDK required — it uses the C# compiler that ships with Windows (.NET Framew
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-This generates the icon and produces `BureauZones.exe` in the repository folder. Note: the script stops any running instance before compiling.
+This generates the icon and produces `Logicapp.exe` in the repository folder. Note: the script stops any running instance before compiling.
 
 ## Usage
 
