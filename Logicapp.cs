@@ -962,13 +962,38 @@ namespace Logicapp
             return !IsDisabledInTaskManager();
         }
 
+        // Windows lance les entrées « Run » avant que les lecteurs cloud ou réseau (kDrive, OneDrive, NAS…) soient montés :
+        // un exe posé sur un tel lecteur est ignoré sans message. On démarre donc une copie gardée sur le disque local.
+        static string LocalStartupCopy()
+        {
+            string exe = Application.ExecutablePath;
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppName);
+                string local = Path.Combine(dir, AppName + ".exe");
+                if (string.Equals(Path.GetFullPath(exe), Path.GetFullPath(local), StringComparison.OrdinalIgnoreCase)) return exe;
+                Directory.CreateDirectory(dir);
+                if (!File.Exists(local) || !SameBytes(exe, local)) File.Copy(exe, local, true);
+                return local;
+            }
+            catch (Exception ex) { Program.LogError(ex); return exe; }
+        }
+
+        static bool SameBytes(string a, string b)
+        {
+            if (new FileInfo(a).Length != new FileInfo(b).Length) return false;
+            byte[] x = File.ReadAllBytes(a), y = File.ReadAllBytes(b);
+            for (int i = 0; i < x.Length; i++) if (x[i] != y[i]) return false;
+            return true;
+        }
+
         static void SetStartup(bool on)
         {
             try
             {
                 using (var k = Registry.CurrentUser.CreateSubKey(RunKey))
                 {
-                    if (on) k.SetValue(AppName, "\"" + Application.ExecutablePath + "\"");
+                    if (on) k.SetValue(AppName, "\"" + LocalStartupCopy() + "\"");
                     else k.DeleteValue(AppName, false);
                 }
                 using (var a = Registry.CurrentUser.CreateSubKey(ApprovedKey))
