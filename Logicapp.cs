@@ -409,7 +409,7 @@ namespace Logicapp
         public Color TitleTextColor = Color.FromArgb(240, 240, 255);
         public Color BorderColor = Color.White;
 
-        public static readonly string[] PresetNames = { "Classique", "Néon RGB", "Night City", "Studio", "Rallye Stellaire" };
+        public static readonly string[] PresetNames = { "Classique", "Néon RGB", "Night City", "Studio", "Rallye Stellaire", "Friche" };
         public static int MaxTheme { get { return PresetNames.Length - 1; } }
 
         public ZoneStyle Clone() { return (ZoneStyle)MemberwiseClone(); }
@@ -455,6 +455,13 @@ namespace Logicapp
                     s.TitleTextColor = Color.FromArgb(239, 230, 214); s.TitleFont = "Bahnschrift SemiBold|10.5|0";
                     s.CornerRadius = 14; s.BorderWidth = 1; s.BorderColor = Color.FromArgb(230, 197, 138); s.BorderAlpha = 150;
                     s.LabelFont = "Bahnschrift|9.5|0"; s.LabelColor = Color.FromArgb(239, 230, 214);
+                    break;
+                case 5: // Friche : béton taché, mousse, ruban adhésif écrit à la main
+                    s.BgColor = Color.FromArgb(36, 39, 31); s.BgAlpha = 235;
+                    s.TitleColor = Color.FromArgb(214, 201, 164); s.TitleAlpha = 245;
+                    s.TitleTextColor = Color.FromArgb(42, 38, 32); s.TitleFont = "Ink Free|13|1";
+                    s.CornerRadius = 3; s.BorderWidth = 1; s.BorderColor = Color.FromArgb(214, 201, 164); s.BorderAlpha = 50;
+                    s.LabelFont = "Segoe UI|9|0"; s.LabelColor = Color.FromArgb(221, 216, 200);
                     break;
                 // [presets]
                 // 1 = Néon RGB : valeurs par défaut de la classe
@@ -1669,6 +1676,7 @@ namespace Logicapp
                 case 2: return Chamfer(r, cut, false, false, full, false); // Night City : bas-droite
                 case 3: return Chamfer(r, cut, false, true, false, false); // Studio : haut-droite
                 case 4: return Chamfer(r, cut, false, true, false, full);  // Rallye Stellaire : haut-droite + bas-gauche
+                case 5: return RoundRect(r, cut, full);                // Friche : coins à peine arrondis
                 // [shape]
                 default: return RoundRect(r, cut, full);
             }
@@ -1783,6 +1791,7 @@ namespace Logicapp
             {
                 switch (Style.Theme)
                 {
+                    case 5: return ZoneApp.I.S(8);
                     // [titleextra]
                     default: return 0;
                 }
@@ -1911,6 +1920,7 @@ namespace Logicapp
             switch (Style.Theme)
             {
                 case 4: TitleRallye(g, w, open, right); break;
+                case 5: TitleFriche(g, w, open, right); break;
                 // [title]
             }
         }
@@ -1920,6 +1930,7 @@ namespace Logicapp
             switch (Style.Theme)
             {
                 case 4: BackRallye(g, w, h, shape, open); break;
+                case 5: BackFriche(g, w, h, shape, open); break;
                 // [back]
             }
         }
@@ -1929,6 +1940,7 @@ namespace Logicapp
             switch (Style.Theme)
             {
                 case 4: DrawSimpleItem(g, i, cell, sel, isz, lb, sb, sf, Holo, Holo); break;
+                case 5: DrawSimpleItem(g, i, cell, sel, isz, lb, sb, sf, Color.FromArgb(255, 238, 196), Style.TitleColor); break;
                 // [item]
             }
         }
@@ -1938,6 +1950,7 @@ namespace Logicapp
             switch (Style.Theme)
             {
                 case 4: FrontRallye(g, w, h, cut); break;
+                case 5: FrontFriche(g, w, h, cut); break;
                 // [front]
             }
         }
@@ -1948,6 +1961,7 @@ namespace Logicapp
             switch (Style.Theme)
             {
                 case 4: AnimRallye(g, w, h, open, cut); break;
+                case 5: AnimFriche(g, w, h, open, cut); break;
                 // [anim]
             }
         }
@@ -2097,6 +2111,167 @@ namespace Logicapp
                     g.ResetClip();
                 }
                 DrawScanBand(g, w, h, cut, Holo, 2600, 90);
+            }
+        }
+
+        // ===== Friche : béton taché, mousse, liane, ruban adhésif écrit à la main, lampe torche =====
+
+        static readonly Color Moss = Color.FromArgb(95, 112, 55), Moss2 = Color.FromArgb(138, 154, 78), MossDark = Color.FromArgb(76, 90, 44);
+
+        static int StableHash(string s)
+        {
+            unchecked
+            {
+                int h = 17;
+                foreach (char c in s ?? "") h = h * 31 + c;
+                return h;
+            }
+        }
+
+        static Color Lighten(Color c, int d)
+        {
+            return Color.FromArgb(c.A, Math.Min(255, c.R + d), Math.Min(255, c.G + d), Math.Min(255, c.B + d));
+        }
+
+        static void Leaf(Graphics g, float x, float y, float rx, float ry, float angle, Brush b)
+        {
+            var st = g.Save();
+            g.TranslateTransform(x, y);
+            g.RotateTransform(angle);
+            g.FillEllipse(b, -rx, -ry, 2 * rx, 2 * ry);
+            g.Restore(st);
+        }
+
+        // Morceau de ruban aux bouts déchirés, centré sur l'origine.
+        static PointF[] TornTape(float w, float h)
+        {
+            float x = w / 2, y = h / 2, j = Math.Max(2f, h * 0.14f);
+            return new[]
+            {
+                new PointF(-x + j * 0.5f, -y), new PointF(x, -y + j * 0.3f), new PointF(x - j, -y + h * 0.3f), new PointF(x, -y + h * 0.52f),
+                new PointF(x - j * 0.6f, -y + h * 0.78f), new PointF(x, y), new PointF(-x, y - j * 0.3f), new PointF(-x + j, y - h * 0.3f),
+                new PointF(-x, -y + h * 0.46f), new PointF(-x + j * 0.6f, -y + h * 0.22f)
+            };
+        }
+
+        void TitleFriche(Graphics g, int w, bool open, float right)
+        {
+            var app = ZoneApp.I;
+            if (Style.ShowCount)
+                using (var cf = new Font(titleFont.FontFamily, Math.Max(7f, titleFont.SizeInPoints * 0.85f), FontStyle.Regular, GraphicsUnit.Point))
+                {
+                    int n = items.Count;
+                    string cnt = n + (n > 1 ? " trucs" : " truc");
+                    float cw = DrawTracked(g, cnt, cf, null, 0, titleH / 2f, 0, float.MaxValue);
+                    using (var b = new SolidBrush(Color.FromArgb(170, Style.TitleColor))) DrawTracked(g, cnt, cf, b, right - cw, titleH / 2f, 0, right);
+                    right -= cw + app.S(12);
+                }
+            // Ruban adhésif un peu de travers, nom écrit à la main
+            float x0 = app.S(12), pad = app.S(14);
+            float tw = DrawTracked(g, ZoneName, titleFont, null, 0, 0, 0, float.MaxValue);
+            float tapeW = Math.Max(app.S(40), Math.Min(tw + 2 * pad, right - x0));
+            float tapeH = Math.Max(app.S(16), titleH - app.S(14));
+            var st = g.Save();
+            g.TranslateTransform(x0 + tapeW / 2, titleH / 2f);
+            g.RotateTransform(-2.2f);
+            PointF[] tape = TornTape(tapeW, tapeH);
+            g.TranslateTransform(1, 2);
+            using (var sh = new SolidBrush(Color.FromArgb(80, 0, 0, 0))) g.FillPolygon(sh, tape);
+            g.TranslateTransform(-1, -2);
+            using (var tb = new LinearGradientBrush(new RectangleF(-tapeW / 2, -tapeH / 2 - 1, tapeW, tapeH + 2),
+                Color.FromArgb(Style.TitleAlpha, Lighten(Style.TitleColor, 14)), Color.FromArgb(Style.TitleAlpha, Style.TitleColor), 90f))
+                g.FillPolygon(tb, tape);
+            using (var b = new SolidBrush(Style.TitleTextColor))
+                DrawTracked(g, ZoneName, titleFont, b, -tapeW / 2 + pad, app.S(1), 0, tapeW / 2 - app.S(6));
+            g.Restore(st);
+        }
+
+        void BackFriche(Graphics g, int w, int h, GraphicsPath shape, bool open)
+        {
+            if (shape == null) return;
+            var app = ZoneApp.I;
+            g.SetClip(shape);
+            FillNoise(g, shape);
+            int seed = StableHash(ZoneName);
+            // Taches d'humidité
+            for (int k = 0; k < 3; k++)
+            {
+                float cx = w * (0.1f + 0.8f * Hash(k, seed)), cy = h * Hash(k, seed + 1), r = app.S(50) + app.S(60) * Hash(k, seed + 2);
+                Color c = k % 2 == 0 ? Color.FromArgb(48, 110, 95, 55) : Color.FromArgb(70, 30, 40, 22);
+                FillGlow(g, new RectangleF(cx - r, cy - r * 0.8f, 2 * r, 1.6f * r), c);
+            }
+            // Mousse qui déborde du coin bas-gauche
+            float[,] blobs = { { 0.18f, 0.70f, 14, 0 }, { 0.34f, 0.85f, 11, 1 }, { 0.48f, 0.95f, 13, 0 }, { 0.08f, 0.40f, 10, 2 }, { 0.62f, 1.0f, 9, 2 }, { 0.26f, 0.55f, 6, 1 } };
+            float bx = -app.S(10), bw2 = app.S(150), bh2 = app.S(60), by = h + app.S(12) - bh2;
+            for (int k = 0; k < blobs.GetLength(0); k++)
+            {
+                float r = app.S((int)blobs[k, 2]);
+                float cx = bx + bw2 * blobs[k, 0], cy = by + bh2 * blobs[k, 1];
+                Color c = blobs[k, 3] == 0 ? Moss : blobs[k, 3] == 1 ? Moss2 : MossDark;
+                using (var b = new SolidBrush(Color.FromArgb(205, c))) g.FillEllipse(b, cx - r, cy - r, 2 * r, 2 * r);
+            }
+            // Liane qui pend du haut (zone ouverte)
+            if (open && h > titleH + app.S(80))
+            {
+                float vx = w * 0.52f;
+                Func<float, float, PointF> P = (x, y) => new PointF(vx + app.S((int)x), app.S((int)y));
+                using (var vp = new Pen(Color.FromArgb(220, 86, 101, 58), Math.Max(1.5f, app.S(2))))
+                {
+                    g.DrawBezier(vp, P(8, 0), P(12, 18), P(2, 30), P(12, 46));
+                    g.DrawBezier(vp, P(12, 46), P(22, 62), P(32, 68), P(28, 86));
+                }
+                using (var vp = new Pen(Color.FromArgb(200, MossDark), Math.Max(1.2f, app.S(1))))
+                    g.DrawBezier(vp, P(40, 0), P(38, 12), P(48, 20), P(44, 34));
+                using (var lb = new SolidBrush(Color.FromArgb(230, 108, 125, 64)))
+                {
+                    float[,] leaves = { { 14, 14, 30 }, { 4, 30, -30 }, { 18, 50, 25 }, { 26, 70, -20 }, { 46, 16, 40 }, { 40, 30, -35 } };
+                    for (int k = 0; k < leaves.GetLength(0); k++)
+                    {
+                        PointF q = P(leaves[k, 0], leaves[k, 1]);
+                        Leaf(g, q.X, q.Y, app.S(5), app.S(3), leaves[k, 2], lb);
+                    }
+                }
+            }
+            g.ResetClip();
+        }
+
+        void FrontFriche(Graphics g, int w, int h, float cut)
+        {
+            if (Style.BorderWidth <= 0) return;
+            float bw = ZoneApp.I.S(Style.BorderWidth);
+            using (var pen = new Pen(Color.FromArgb(Style.BorderAlpha, Style.BorderColor), bw))
+            using (var bp = ShapePath(new RectangleF(bw / 2, bw / 2, w - bw, h - bw), Math.Max(0, cut - bw / 2), true))
+                g.DrawPath(pen, bp);
+        }
+
+        void AnimFriche(Graphics g, int w, int h, bool open, float cut)
+        {
+            var app = ZoneApp.I;
+            if (!open || !IsActive || h <= titleH) return;
+            float t = EaseOut(HoverProgress(250));
+            float now = Clock.ElapsedMilliseconds % 1000000L;
+            using (var shape = ShapePath(new RectangleF(0, 0, w, h), cut, true))
+            {
+                g.SetClip(shape);
+                // Lampe torche qui suit la souris, avec un vacillement de temps en temps
+                Point m = PointToClient(Cursor.Position);
+                float f = now % 5000;
+                float flick = f > 4450 && f < 4500 ? 0.35f : f > 4600 && f < 4650 ? 0.55f : 1f;
+                float r = app.S(130);
+                FillGlow(g, new RectangleF(m.X - r, m.Y - r, 2 * r, 2 * r), Color.FromArgb((int)(52 * t * flick), 255, 238, 196));
+                // Spores lumineuses qui montent lentement
+                float d = Math.Max(2f, app.S(3));
+                for (int k = 0; k < 12; k++)
+                {
+                    float dur = 5000 + 4000 * Hash(k, 11), p = ((now + Hash(k, 12) * 8000) % dur) / dur;
+                    float x = w * (0.06f + 0.88f * Hash(k, 13)) + (Hash(k, 14) - 0.5f) * app.S(30) * p;
+                    float y = titleH + (h - titleH) * (0.55f + 0.45f * Hash(k, 15)) - app.S(140) * p;
+                    float a = p < 0.15f ? p / 0.15f : p > 0.85f ? (1 - p) / 0.15f : 1f;
+                    int al = (int)(200 * a * t);
+                    using (var b = new SolidBrush(Color.FromArgb(al / 3, 225, 232, 180))) g.FillEllipse(b, x - d, y - d, 2 * d, 2 * d);
+                    using (var b = new SolidBrush(Color.FromArgb(al, 225, 232, 180))) g.FillEllipse(b, x - d / 2, y - d / 2, d, d);
+                }
+                g.ResetClip();
             }
         }
 
