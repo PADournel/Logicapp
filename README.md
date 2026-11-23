@@ -15,6 +15,13 @@ A lightweight Windows 11 app that adds **collapsible zones** to your desktop for
   - **Night City**: cyan beveled title tab, magenta accents, scanlines, a sweeping light beam
   - **Studio**: sober dark card with an accent line that slowly shifts color
   - **Classique**: the original rounded look
+- **Illustrated presets**, each with subtle hover animations:
+  - **Rallye Stellaire**: brushed gunmetal, orange racing chevrons, a cyan light blade that ignites under the title, holographic grid and scan
+  - **Friche**: stained concrete with moss and a vine, name handwritten on masking tape, a flashlight beam that follows the mouse, drifting spores
+  - **Sanguine**: gothic bronze frame with corner ornaments, Roman numeral count, a line of blood that spreads and drips, candlelight and mist
+  - **Veillée**: stone tome with a gold serif tab, recessed sepia icon slots, filigree rules, a glint along the frame, candlelight and mist
+  - **Circuit**: cream paper, "/NAME" title, retro racing stripes, teal icon cards that lift on hover, speed streaks and blowing sand
+  - **Exil**: charcoal holo-map with copper orbits, spaced capitals with a stretching underline, round icon discs, white name pill, orbiting dots
   - Animations run smoothly only while the mouse is over a zone (or very slowly in "always" mode), so the app stays at ~0% CPU when idle
 - **Appearance settings** (gear icon in each title bar), with live preview:
   - style preset, RGB animation (off / on hover / always, slow)
