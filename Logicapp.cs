@@ -409,7 +409,7 @@ namespace Logicapp
         public Color TitleTextColor = Color.FromArgb(240, 240, 255);
         public Color BorderColor = Color.White;
 
-        public static readonly string[] PresetNames = { "Classique", "Néon RGB", "Night City", "Studio", "Rallye Stellaire", "Friche" };
+        public static readonly string[] PresetNames = { "Classique", "Néon RGB", "Night City", "Studio", "Rallye Stellaire", "Friche", "Sanguine" };
         public static int MaxTheme { get { return PresetNames.Length - 1; } }
 
         public ZoneStyle Clone() { return (ZoneStyle)MemberwiseClone(); }
@@ -462,6 +462,13 @@ namespace Logicapp
                     s.TitleTextColor = Color.FromArgb(42, 38, 32); s.TitleFont = "Ink Free|13|1";
                     s.CornerRadius = 3; s.BorderWidth = 1; s.BorderColor = Color.FromArgb(214, 201, 164); s.BorderAlpha = 50;
                     s.LabelFont = "Segoe UI|9|0"; s.LabelColor = Color.FromArgb(221, 216, 200);
+                    break;
+                case 6: // Sanguine : nuit gothique, cadre bronze, rouge sang
+                    s.BgColor = Color.FromArgb(19, 12, 14); s.BgAlpha = 240;
+                    s.TitleColor = Color.FromArgb(155, 28, 36); s.TitleAlpha = 255;
+                    s.TitleTextColor = Color.FromArgb(217, 207, 191); s.TitleFont = "Palatino Linotype|10.5|1";
+                    s.CornerRadius = 0; s.BorderWidth = 1; s.BorderColor = Color.FromArgb(140, 115, 80); s.BorderAlpha = 210;
+                    s.LabelFont = "Palatino Linotype|9.5|0"; s.LabelColor = Color.FromArgb(217, 207, 191);
                     break;
                 // [presets]
                 // 1 = Néon RGB : valeurs par défaut de la classe
@@ -1677,6 +1684,7 @@ namespace Logicapp
                 case 3: return Chamfer(r, cut, false, true, false, false); // Studio : haut-droite
                 case 4: return Chamfer(r, cut, false, true, false, full);  // Rallye Stellaire : haut-droite + bas-gauche
                 case 5: return RoundRect(r, cut, full);                // Friche : coins à peine arrondis
+                case 6: return RoundRect(r, cut, full);                // Sanguine : rectangle (coins réglables)
                 // [shape]
                 default: return RoundRect(r, cut, full);
             }
@@ -1792,6 +1800,7 @@ namespace Logicapp
                 switch (Style.Theme)
                 {
                     case 5: return ZoneApp.I.S(8);
+                    case 6: return ZoneApp.I.S(12);
                     // [titleextra]
                     default: return 0;
                 }
@@ -1921,6 +1930,7 @@ namespace Logicapp
             {
                 case 4: TitleRallye(g, w, open, right); break;
                 case 5: TitleFriche(g, w, open, right); break;
+                case 6: TitleSanguine(g, w, open, right); break;
                 // [title]
             }
         }
@@ -1931,6 +1941,7 @@ namespace Logicapp
             {
                 case 4: BackRallye(g, w, h, shape, open); break;
                 case 5: BackFriche(g, w, h, shape, open); break;
+                case 6: BackSanguine(g, w, h, shape, open); break;
                 // [back]
             }
         }
@@ -1941,6 +1952,7 @@ namespace Logicapp
             {
                 case 4: DrawSimpleItem(g, i, cell, sel, isz, lb, sb, sf, Holo, Holo); break;
                 case 5: DrawSimpleItem(g, i, cell, sel, isz, lb, sb, sf, Color.FromArgb(255, 238, 196), Style.TitleColor); break;
+                case 6: DrawSimpleItem(g, i, cell, sel, isz, lb, sb, sf, Style.TitleColor, Style.BorderColor); break;
                 // [item]
             }
         }
@@ -1951,6 +1963,7 @@ namespace Logicapp
             {
                 case 4: FrontRallye(g, w, h, cut); break;
                 case 5: FrontFriche(g, w, h, cut); break;
+                case 6: FrontSanguine(g, w, h); break;
                 // [front]
             }
         }
@@ -1962,6 +1975,7 @@ namespace Logicapp
             {
                 case 4: AnimRallye(g, w, h, open, cut); break;
                 case 5: AnimFriche(g, w, h, open, cut); break;
+                case 6: AnimSanguine(g, w, h, open, cut); break;
                 // [anim]
             }
         }
@@ -2273,6 +2287,192 @@ namespace Logicapp
                 }
                 g.ResetClip();
             }
+        }
+
+        // ===== Sanguine : nuit gothique, cadre bronze à ornements, capitales gravées, filet de sang, bougie =====
+
+        static string Roman(int n)
+        {
+            if (n <= 0) return "0";
+            if (n > 3999) return n.ToString();
+            int[] v = { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
+            string[] r = { "M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I" };
+            var sb = new StringBuilder();
+            for (int i = 0; i < v.Length; i++) while (n >= v[i]) { sb.Append(r[i]); n -= v[i]; }
+            return sb.ToString();
+        }
+
+        float SanguineRuleY { get { return titleH - ZoneApp.I.S(6); } }
+
+        void TitleSanguine(Graphics g, int w, bool open, float right)
+        {
+            var app = ZoneApp.I;
+            Color bronze = Style.BorderColor;
+            float textMid = (titleH - app.S(10)) / 2f + app.S(2);
+            float track = titleFont.Size * 0.3f * app.Scale;
+            string name = ZoneName.ToUpperInvariant();
+            string cnt = Collapsed && Style.ShowCount ? "·  " + Roman(items.Count) + "  ·" : null;
+            float maxR = Math.Min(right, w - app.S(30));
+            float tw = DrawTracked(g, name, titleFont, null, 0, textMid, track, float.MaxValue);
+            Font cf = null;
+            float cw = 0;
+            if (cnt != null)
+            {
+                cf = new Font(titleFont.FontFamily, Math.Max(7f, titleFont.SizeInPoints * 0.85f), FontStyle.Regular, GraphicsUnit.Point);
+                cw = DrawTracked(g, cnt, cf, null, 0, textMid, track * 0.5f, float.MaxValue) + app.S(10);
+            }
+            float x = Math.Max(app.S(30), (w - tw - cw) / 2f);
+            using (var b = new SolidBrush(Style.TitleTextColor)) x += DrawTracked(g, name, titleFont, b, x, textMid, track, maxR - cw) + app.S(10);
+            if (cf != null)
+            {
+                using (var b = new SolidBrush(Lighten(Style.TitleColor, 25))) DrawTracked(g, cnt, cf, b, x, textMid, track * 0.5f, maxR);
+                cf.Dispose();
+            }
+            // Filet bronze avec losange central
+            float ry = SanguineRuleY, rx0 = app.S(24), rx1 = w - app.S(24);
+            if (rx1 > rx0 + 10)
+                using (var lb = new LinearGradientBrush(new RectangleF(rx0 - 1, ry, rx1 - rx0 + 2, 2), Color.Black, Color.Black, 0f))
+                {
+                    var cb = new ColorBlend(4);
+                    cb.Colors = new[] { Color.FromArgb(0, bronze), Color.FromArgb(180, bronze), Color.FromArgb(180, bronze), Color.FromArgb(0, bronze) };
+                    cb.Positions = new[] { 0f, 0.25f, 0.75f, 1f };
+                    lb.InterpolationColors = cb;
+                    g.FillRectangle(lb, rx0, ry, rx1 - rx0, Math.Max(1, app.S(1)));
+                }
+            float d = app.S(4), cx = w / 2f, dy = ry + 0.5f;
+            var dia = new[] { new PointF(cx, dy - d), new PointF(cx + d, dy), new PointF(cx, dy + d), new PointF(cx - d, dy) };
+            using (var p = new Pen(Color.FromArgb(Math.Max(1, Style.BgAlpha), Style.BgColor), app.S(2))) g.DrawPolygon(p, dia);
+            using (var b = new SolidBrush(bronze)) g.FillPolygon(b, dia);
+        }
+
+        void BackSanguine(Graphics g, int w, int h, GraphicsPath shape, bool open)
+        {
+            if (shape == null) return;
+            g.SetClip(shape);
+            using (var lb = new LinearGradientBrush(new RectangleF(0, -1, w, h + 2), Color.Black, Color.Black, 90f))
+            {
+                Color wine = Color.FromArgb(46, 11, 16);
+                var cb = new ColorBlend(4);
+                cb.Colors = new[] { Color.FromArgb(0, wine), Color.FromArgb(0, wine), Color.FromArgb(150, wine), Color.FromArgb(230, 52, 10, 16) };
+                cb.Positions = new[] { 0f, 0.35f, 0.7f, 1f };
+                lb.InterpolationColors = cb;
+                g.FillRectangle(lb, 0, 0, w, h);
+            }
+            g.ResetClip();
+        }
+
+        // Ornement d'angle (dessiné pour le coin haut-gauche dans une boîte de 30 × 30, puis retourné).
+        static void Ornament(Graphics g, float x, float y, float sx, float sy, float size, Color c)
+        {
+            var st = g.Save();
+            g.TranslateTransform(x, y);
+            g.ScaleTransform(sx * size / 30f, sy * size / 30f);
+            using (var p = new Pen(c, 1.2f))
+            {
+                g.DrawLine(p, 3, 27, 3, 9); g.DrawArc(p, 3, 3, 12, 12, 180, 90); g.DrawLine(p, 9, 3, 27, 3);
+            }
+            using (var p = new Pen(Color.FromArgb(c.A * 7 / 10, c), 0.8f))
+            {
+                g.DrawLine(p, 7, 23, 7, 12); g.DrawArc(p, 7, 7, 10, 10, 180, 90); g.DrawLine(p, 12, 7, 23, 7);
+            }
+            using (var p = new Pen(c, 1f)) g.DrawBezier(p, 10, 10, 13, 10, 14, 12, 12, 14);
+            using (var b = new SolidBrush(c))
+            {
+                g.FillEllipse(b, 1.6f, 25.6f, 2.8f, 2.8f);
+                g.FillEllipse(b, 25.6f, 1.6f, 2.8f, 2.8f);
+                g.FillPolygon(b, new[] { new PointF(16, 1), new PointF(18, 3), new PointF(16, 5), new PointF(14, 3) });
+                g.FillPolygon(b, new[] { new PointF(1, 16), new PointF(3, 14), new PointF(5, 16), new PointF(3, 18) });
+            }
+            g.Restore(st);
+        }
+
+        void FrontSanguine(Graphics g, int w, int h)
+        {
+            var app = ZoneApp.I;
+            Color c = Color.FromArgb(Style.BorderAlpha, Style.BorderColor);
+            if (Style.BorderWidth > 0)
+            {
+                float bw = app.S(Style.BorderWidth);
+                using (var pen = new Pen(c, bw)) g.DrawRectangle(pen, bw / 2, bw / 2, w - bw, h - bw);
+                float ins = app.S(4) + bw / 2;
+                if (h > 2 * ins + 2)
+                    using (var pen = new Pen(Color.FromArgb(Style.BorderAlpha * 2 / 5, Style.BorderColor))) g.DrawRectangle(pen, ins, ins, w - 2 * ins, h - 2 * ins);
+            }
+            float size = Math.Min(app.S(28), h / 2f - app.S(2)), o = app.S(2);
+            if (size < app.S(10)) return;
+            Ornament(g, o, o, 1, 1, size, c);
+            Ornament(g, w - o, o, -1, 1, size, c);
+            Ornament(g, o, h - o, 1, -1, size, c);
+            Ornament(g, w - o, h - o, -1, -1, size, c);
+        }
+
+        static readonly int[] CandleAt = { 0, 11, 23, 31, 47, 58, 71, 84 };
+        static readonly float[] CandleLevel = { 0.9f, 1f, 0.75f, 0.95f, 0.82f, 1f, 0.7f, 0.92f };
+
+        // Intensité d'une flamme qui vacille par paliers irréguliers.
+        static float CandleFlicker(float now, float periodMs)
+        {
+            float ph = (now % periodMs) / periodMs * 100f;
+            float lv = CandleLevel[0];
+            for (int k = 0; k < CandleAt.Length; k++) if (ph >= CandleAt[k]) lv = CandleLevel[k];
+            return lv;
+        }
+
+        // Voile de brume qui dérive lentement au ras du bas.
+        void DrawMist(Graphics g, int w, int h, float now, float t, int alpha)
+        {
+            var app = ZoneApp.I;
+            if (h <= titleH + app.S(30)) return;
+            g.SetClip(new Rectangle(0, titleH, w, h - titleH));
+            float shift = (float)Math.Sin(now / 9000.0 * 2 * Math.PI) * w * 0.09f, ry = app.S(42);
+            FillGlow(g, new RectangleF(w * 0.25f + shift - w * 0.4f, h - ry, w * 0.8f, 2 * ry), Color.FromArgb((int)(alpha * t), 200, 192, 198));
+            FillGlow(g, new RectangleF(w * 0.7f - shift * 0.7f - w * 0.35f, h - ry * 0.8f, w * 0.7f, 1.6f * ry), Color.FromArgb((int)(alpha * 0.8f * t), 200, 192, 198));
+            g.ResetClip();
+        }
+
+        void AnimSanguine(Graphics g, int w, int h, bool open, float cut)
+        {
+            var app = ZoneApp.I;
+            if (!IsActive) return;
+            float t = EaseOut(HoverProgress(500));
+            float now = Clock.ElapsedMilliseconds % 1000000L;
+            long el = Clock.ElapsedMilliseconds - activeSince;
+            // Lueur de bougie qui vacille en haut de la zone
+            FillGlow(g, new RectangleF(w / 2f - w * 0.8f, -h * 0.55f, w * 1.6f, h * 1.1f), Color.FromArgb((int)(46 * t * CandleFlicker(now, 1700)), 255, 179, 107));
+            // Filet de sang qui se répand depuis le centre du séparateur
+            float ry = SanguineRuleY, full = (w - app.S(48)) * 0.8f, len = full * t, cx = w / 2f;
+            if (len > 2)
+            {
+                Color cr = Style.TitleColor;
+                using (var lb = new LinearGradientBrush(new RectangleF(cx - len / 2 - 1, ry, len + 2, 2), Color.Black, Color.Black, 0f))
+                {
+                    var cb = new ColorBlend(5);
+                    cb.Colors = new[] { Color.FromArgb(0, cr), Color.FromArgb(255, cr), Color.FromArgb(255, Lighten(cr, 40)), Color.FromArgb(255, cr), Color.FromArgb(0, cr) };
+                    cb.Positions = new[] { 0f, 0.3f, 0.5f, 0.7f, 1f };
+                    lb.InterpolationColors = cb;
+                    g.FillRectangle(lb, cx - len / 2, ry - app.S(1), len, app.S(3));
+                }
+                FillGlow(g, new RectangleF(cx - len / 2, ry - app.S(5), len, app.S(11)), Color.FromArgb(70, Lighten(cr, 40)));
+            }
+            if (!open) return;
+            // Une goutte se forme sous le losange puis tombe, toutes les 4,2 s
+            if (el > 600)
+            {
+                float p = ((el - 600) % 4200) / 4200f, dl, dy = 0;
+                int a = 255;
+                if (p < 0.35f) dl = app.S(12) * (p / 0.35f);
+                else if (p < 0.55f) { float q = (p - 0.35f) / 0.2f; dl = app.S(9); dy = app.S(60) * q * q; }
+                else if (p < 0.62f) { float q = (p - 0.55f) / 0.07f; dl = app.S(9); dy = app.S(60) + app.S(20) * q; a = (int)(255 * (1 - q)); }
+                else dl = 0;
+                if (dl > 1)
+                {
+                    float dw = Math.Max(2f, app.S(3)), y0 = ry + app.S(5) + dy;
+                    using (var lb = new LinearGradientBrush(new RectangleF(cx - dw / 2, y0 - 1, dw, dl + 2), Color.FromArgb(a, 125, 20, 27), Color.FromArgb(a, 195, 38, 47), 90f))
+                    using (var dp = RoundRect(new RectangleF(cx - dw / 2, y0, dw, dl), dw / 2, true))
+                        g.FillPath(lb, dp);
+                }
+            }
+            DrawMist(g, w, h, now, t, 36);
         }
 
         // ---------- Rendu ----------
