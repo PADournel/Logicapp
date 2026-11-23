@@ -409,7 +409,7 @@ namespace Logicapp
         public Color TitleTextColor = Color.FromArgb(240, 240, 255);
         public Color BorderColor = Color.White;
 
-        public static readonly string[] PresetNames = { "Classique", "Néon RGB", "Night City", "Studio", "Rallye Stellaire", "Friche", "Sanguine", "Veillée", "Circuit" };
+        public static readonly string[] PresetNames = { "Classique", "Néon RGB", "Night City", "Studio", "Rallye Stellaire", "Friche", "Sanguine", "Veillée", "Circuit", "Exil" };
         public static int MaxTheme { get { return PresetNames.Length - 1; } }
 
         public ZoneStyle Clone() { return (ZoneStyle)MemberwiseClone(); }
@@ -483,6 +483,13 @@ namespace Logicapp
                     s.TitleTextColor = Color.FromArgb(30, 42, 48); s.TitleFont = "Bahnschrift|12|1";
                     s.CornerRadius = 12; s.BorderWidth = 0; s.BorderColor = Color.White; s.BorderAlpha = 60;
                     s.LabelFont = "Bahnschrift SemiBold|8.5|0"; s.LabelColor = Color.FromArgb(243, 241, 234);
+                    break;
+                case 9: // Exil : anthracite, orbites cuivrées, pastilles rondes
+                    s.BgColor = Color.FromArgb(21, 21, 23); s.BgAlpha = 230;
+                    s.TitleColor = Color.FromArgb(200, 116, 58); s.TitleAlpha = 255;
+                    s.TitleTextColor = Color.FromArgb(244, 242, 238); s.TitleFont = "Segoe UI Semibold|9.5|0";
+                    s.CornerRadius = 4; s.BorderWidth = 1; s.BorderColor = Color.White; s.BorderAlpha = 14;
+                    s.LabelFont = "Segoe UI|8.5|0"; s.LabelColor = Color.FromArgb(163, 163, 166);
                     break;
                 // [presets]
                 // 1 = Néon RGB : valeurs par défaut de la classe
@@ -1701,6 +1708,7 @@ namespace Logicapp
                 case 6: return RoundRect(r, cut, full);                // Sanguine : rectangle (coins réglables)
                 case 7: return RoundRect(r, cut, full);                // Veillée : rectangle (onglet de titre à part)
                 case 8: return RoundRect(r, cut, full);                // Circuit : carte arrondie
+                case 9: return RoundRect(r, cut, full);                // Exil : coins à peine arrondis
                 // [shape]
                 default: return RoundRect(r, cut, full);
             }
@@ -1804,6 +1812,7 @@ namespace Logicapp
                 {
                     case 7: return ZoneApp.I.S(8);
                     case 8: return ZoneApp.I.S(8);
+                    case 9: return ZoneApp.I.S(8);
                     // [inset]
                     default: return 0;
                 }
@@ -1821,6 +1830,7 @@ namespace Logicapp
                     case 6: return ZoneApp.I.S(12);
                     case 7: return ZoneApp.I.S(6);
                     case 8: return ZoneApp.I.S(8);
+                    case 9: return ZoneApp.I.S(8);
                     // [titleextra]
                     default: return 0;
                 }
@@ -1954,6 +1964,7 @@ namespace Logicapp
                 case 6: TitleSanguine(g, w, open, right); break;
                 case 7: TitleVeillee(g, w, open, right); break;
                 case 8: TitleCircuit(g, w, open, right); break;
+                case 9: TitleExil(g, w, open, right); break;
                 // [title]
             }
         }
@@ -1967,6 +1978,7 @@ namespace Logicapp
                 case 6: BackSanguine(g, w, h, shape, open); break;
                 case 7: BackVeillee(g, w, h, shape, open); break;
                 case 8: BackCircuit(g, w, h, shape, open); break;
+                case 9: BackExil(g, w, h, shape, open); break;
                 // [back]
             }
         }
@@ -1980,6 +1992,7 @@ namespace Logicapp
                 case 6: DrawSimpleItem(g, i, cell, sel, isz, lb, sb, sf, Style.TitleColor, Style.BorderColor); break;
                 case 7: ItemVeillee(g, i, cell, sel, isz, lb, sb, sf); break;
                 case 8: ItemCircuit(g, i, cell, sel, isz, lb, sb, sf); break;
+                case 9: ItemExil(g, i, cell, sel, isz, lb, sb, sf); break;
                 // [item]
             }
         }
@@ -1993,6 +2006,7 @@ namespace Logicapp
                 case 6: FrontSanguine(g, w, h); break;
                 case 7: FrontVeillee(g, w, h); break;
                 case 8: FrontCircuit(g, w, h, cut); break;
+                case 9: FrontExil(g, w, h, cut); break;
                 // [front]
             }
         }
@@ -2007,6 +2021,7 @@ namespace Logicapp
                 case 6: AnimSanguine(g, w, h, open, cut); break;
                 case 7: AnimVeillee(g, w, h, open, cut); break;
                 case 8: AnimCircuit(g, w, h, open, cut); break;
+                case 9: AnimExil(g, w, h, open, cut); break;
                 // [anim]
             }
         }
@@ -2809,6 +2824,182 @@ namespace Logicapp
                 }
                 g.ResetClip();
             }
+        }
+
+        // ===== Exil : anthracite, orbites cuivrées, capitales très espacées soulignées, pastilles rondes =====
+
+        float exilTextX, exilTextW;
+
+        float ExilUnderlineY { get { return titleH - ZoneApp.I.S(9); } }
+
+        PointF ExilOrbitCenter(int w, int h) { return new PointF(w * 0.62f, titleH + (h - titleH) * 0.5f); }
+
+        void DrawExilUnderline(Graphics g, float k)
+        {
+            var app = ZoneApp.I;
+            float full = Math.Max(app.S(20), exilTextW * 0.6f), uw = full * k, uh = Math.Max(2, app.S(3));
+            if (uw < uh) return;
+            float cx = exilTextX + exilTextW / 2f;
+            using (var p = RoundRect(new RectangleF(cx - uw / 2, ExilUnderlineY, uw, uh), uh / 2, true))
+            using (var b = new SolidBrush(Color.FromArgb(Style.TitleAlpha, Style.TitleColor))) g.FillPath(b, p);
+        }
+
+        void TitleExil(Graphics g, int w, bool open, float right)
+        {
+            var app = ZoneApp.I;
+            Color white = Style.TitleTextColor;
+            float mid = titleH / 2f - app.S(2);
+            // Compteur et jauge cuivrée (pleine à 12 éléments)
+            if (Style.ShowCount)
+                using (var cf = new Font(titleFont.FontFamily, titleFont.SizeInPoints * 1.15f, FontStyle.Bold, GraphicsUnit.Point))
+                {
+                    float barW = app.S(70), barH = Math.Max(3, app.S(4)), by = mid - barH / 2, bx = right - barW - app.S(6);
+                    using (var p = new Pen(Color.FromArgb(90, white)))
+                    {
+                        g.DrawLine(p, bx - app.S(5), mid - app.S(6), bx - app.S(5), mid + app.S(6));
+                        g.DrawLine(p, bx + barW + app.S(5), mid - app.S(6), bx + barW + app.S(5), mid + app.S(6));
+                    }
+                    using (var tp = RoundRect(new RectangleF(bx, by, barW, barH), barH / 2, true))
+                    using (var b = new SolidBrush(Color.FromArgb(22, white))) g.FillPath(b, tp);
+                    float fw = barW * Math.Min(1f, items.Count / 12f);
+                    if (fw >= barH)
+                        using (var fp = RoundRect(new RectangleF(bx, by, fw, barH), barH / 2, true))
+                        using (var b = new LinearGradientBrush(new RectangleF(bx - 1, by, fw + 2, barH), Color.FromArgb(184, 101, 47), Lighten(Style.TitleColor, 30), 0f))
+                            g.FillPath(b, fp);
+                    string cnt = items.Count.ToString("00");
+                    float cw = DrawTracked(g, cnt, cf, null, 0, 0, 0, float.MaxValue);
+                    using (var b = new SolidBrush(white)) DrawTracked(g, cnt, cf, b, bx - app.S(12) - cw, mid, 0, bx);
+                    right = bx - app.S(24) - cw;
+                }
+            float track = titleFont.Size * 0.32f * app.Scale;
+            exilTextX = app.S(18);
+            using (var b = new SolidBrush(white))
+                exilTextW = DrawTracked(g, ZoneName.ToUpperInvariant(), titleFont, b, exilTextX, mid, track, right);
+            DrawExilUnderline(g, 0.35f); // au repos ; il s'étire au survol
+        }
+
+        void BackExil(Graphics g, int w, int h, GraphicsPath shape, bool open)
+        {
+            if (shape == null) return;
+            var app = ZoneApp.I;
+            if (!open || h <= titleH + app.S(40)) return;
+            g.SetClip(shape);
+            // Titre répété en filigrane géant
+            using (var gf = new Font(titleFont.FontFamily, titleFont.SizeInPoints * 6.5f, FontStyle.Bold, GraphicsUnit.Point))
+            using (var b = new SolidBrush(Color.FromArgb(9, 255, 255, 255)))
+                g.DrawString(ZoneName.ToUpperInvariant(), gf, b, -app.S(6), titleH + app.S(2));
+            // Orbites et réticule de carte holographique
+            Color o = Style.TitleColor;
+            PointF c = ExilOrbitCenter(w, h);
+            float r1 = app.S(250), r2 = app.S(210);
+            using (var p = new Pen(Color.FromArgb(48, o))) g.DrawEllipse(p, c.X - r1, c.Y - r1, 2 * r1, 2 * r1);
+            using (var p = new Pen(Color.FromArgb(40, o))) g.DrawEllipse(p, c.X - r2, c.Y - r2, 2 * r2, 2 * r2);
+            DrawExilDashedOrbit(g, c, 0f, 34);
+            using (var p = new Pen(Color.FromArgb(26, o)))
+            {
+                g.DrawLine(p, 0, c.Y, w, c.Y);
+                g.DrawLine(p, c.X, titleH, c.X, h);
+            }
+            float tk = app.S(200);
+            using (var p = new Pen(Color.FromArgb(90, o)))
+            {
+                g.DrawLine(p, c.X - tk, c.Y - app.S(6), c.X - tk, c.Y + app.S(6));
+                g.DrawLine(p, c.X + tk, c.Y - app.S(6), c.X + tk, c.Y + app.S(6));
+            }
+            g.ResetClip();
+        }
+
+        void DrawExilDashedOrbit(Graphics g, PointF c, float offset, int alpha)
+        {
+            float r3 = ZoneApp.I.S(170);
+            using (var p = new Pen(Color.FromArgb(alpha, Style.TitleColor)) { DashPattern = new float[] { 2, 6 }, DashOffset = offset })
+                g.DrawEllipse(p, c.X - r3, c.Y - r3, 2 * r3, 2 * r3);
+        }
+
+        void ItemExil(Graphics g, int i, Rectangle cell, bool sel, int isz, Brush lb, Brush sb, StringFormat sf)
+        {
+            var app = ZoneApp.I;
+            bool hov = i == hover;
+            var ir = IconRect(cell, isz);
+            float d = isz + 2 * IconInset;
+            var disc = new RectangleF(ir.X + isz / 2f - d / 2, ir.Y + isz / 2f - d / 2, d, d);
+            if (hov) disc.Inflate(app.S(1), app.S(1));
+            using (var p = new GraphicsPath())
+            {
+                p.AddEllipse(disc);
+                using (var b = new PathGradientBrush(p))
+                {
+                    b.CenterPoint = new PointF(disc.X + disc.Width * 0.4f, disc.Y + disc.Height * 0.35f);
+                    b.CenterColor = Color.FromArgb(51, 51, 54);
+                    b.SurroundColors = new[] { Color.FromArgb(31, 31, 33) };
+                    g.FillPath(b, p);
+                }
+            }
+            float rw = Math.Max(1.5f, app.S(2));
+            if (hov)
+                using (var p = new Pen(Color.FromArgb(46, 255, 255, 255), app.S(6))) g.DrawEllipse(p, RectangleF.Inflate(disc, app.S(2), app.S(2)));
+            Color ring = sel ? Color.FromArgb(Style.TitleAlpha, Style.TitleColor) : hov ? Color.FromArgb(244, 242, 238) : Color.FromArgb(59, 59, 62);
+            using (var p = new Pen(ring, rw)) g.DrawEllipse(p, RectangleF.Inflate(disc, -rw / 2, -rw / 2));
+            if (items[i].Icon != null) g.DrawImage(items[i].Icon, ir);
+            var lr = LabelRect(cell, ir);
+            if (!hov) { DrawItemLabel(g, items[i].Name, lr, lb, sb, sf); return; }
+            // Le nom survolé devient une pilule blanche
+            using (var one = new StringFormat(sf))
+            {
+                one.FormatFlags |= StringFormatFlags.NoWrap;
+                one.Trimming = StringTrimming.EllipsisCharacter;
+                one.LineAlignment = StringAlignment.Center;
+                SizeF ts = g.MeasureString(items[i].Name, labelFont, new SizeF(cell.Width - app.S(18), lineH * 1.5f), one);
+                float pw = Math.Min(cell.Width - app.S(4), ts.Width + app.S(14)), ph = lineH + app.S(4);
+                var pr = new RectangleF(cell.X + (cell.Width - pw) / 2f, lr.Y - app.S(2), pw, ph);
+                using (var pp = RoundRect(pr, ph / 2, true))
+                using (var b = new SolidBrush(Color.FromArgb(244, 242, 238))) g.FillPath(b, pp);
+                using (var b = new SolidBrush(Color.FromArgb(18, 18, 20)))
+                    g.DrawString(items[i].Name, labelFont, b, new RectangleF(pr.X + app.S(6), pr.Y, pr.Width - app.S(12), pr.Height), one);
+            }
+        }
+
+        void FrontExil(Graphics g, int w, int h, float cut)
+        {
+            if (Style.BorderWidth <= 0) return;
+            float bw = ZoneApp.I.S(Style.BorderWidth);
+            using (var pen = new Pen(Color.FromArgb(Style.BorderAlpha, Style.BorderColor), bw))
+            using (var bp = ShapePath(new RectangleF(bw / 2, bw / 2, w - bw, h - bw), Math.Max(0, cut - bw / 2), true))
+                g.DrawPath(pen, bp);
+        }
+
+        void AnimExil(Graphics g, int w, int h, bool open, float cut)
+        {
+            var app = ZoneApp.I;
+            if (!IsActive) return;
+            float t = EaseOut(HoverProgress(350));
+            float now = Clock.ElapsedMilliseconds % 1000000L;
+            // Le soulignement s'étire depuis le centre
+            DrawExilUnderline(g, 0.35f + 0.65f * t);
+            if (!open || h <= titleH + app.S(40)) return;
+            using (var shape = ShapePath(new RectangleF(0, 0, w, h), cut, true))
+            {
+                g.SetClip(shape);
+                g.IntersectClip(new Rectangle(0, titleH, w, h - titleH));
+                PointF c = ExilOrbitCenter(w, h);
+                Color o = Style.TitleColor;
+                // Orbites qui tournent très lentement, en sens opposés
+                DrawExilDashedOrbit(g, c, (now / 110000f * 2 * (float)Math.PI * app.S(170)) % 8f, (int)(34 + 40 * t));
+                float r1 = app.S(250), r2 = app.S(210);
+                float a1 = (float)(now / 70000.0 * 2 * Math.PI), a2 = -(float)(now / 110000.0 * 2 * Math.PI);
+                Action<float, float, float, Color> dot = (r, a, size, col) =>
+                {
+                    float x = c.X + r * (float)Math.Cos(a), y = c.Y + r * (float)Math.Sin(a);
+                    using (var b = new SolidBrush(col)) g.FillEllipse(b, x - size, y - size, 2 * size, 2 * size);
+                };
+                dot(r1, a1, app.S(4), Color.FromArgb((int)(220 * t), o));
+                dot(r1, a1 + (float)Math.PI, app.S(3), Color.FromArgb((int)(160 * t), o));
+                dot(r2, a2 - (float)Math.PI / 2, app.S(5), Color.FromArgb((int)(200 * t), o));
+                dot(r2, a2 + (float)Math.PI / 4, Math.Max(2f, app.S(5) / 2f), Color.FromArgb((int)(150 * t), 232, 226, 216));
+                g.ResetClip();
+            }
+            // Bande cuivrée qui balaie la zone, comme une carte holographique
+            DrawScanBand(g, w, h, cut, Style.TitleColor, 4500, 70);
         }
 
         // ---------- Rendu ----------
