@@ -409,7 +409,7 @@ namespace Logicapp
         public Color TitleTextColor = Color.FromArgb(240, 240, 255);
         public Color BorderColor = Color.White;
 
-        public static readonly string[] PresetNames = { "Classique", "Néon RGB", "Night City", "Studio", "Rallye Stellaire", "Friche", "Sanguine" };
+        public static readonly string[] PresetNames = { "Classique", "Néon RGB", "Night City", "Studio", "Rallye Stellaire", "Friche", "Sanguine", "Veillée" };
         public static int MaxTheme { get { return PresetNames.Length - 1; } }
 
         public ZoneStyle Clone() { return (ZoneStyle)MemberwiseClone(); }
@@ -469,6 +469,13 @@ namespace Logicapp
                     s.TitleTextColor = Color.FromArgb(217, 207, 191); s.TitleFont = "Palatino Linotype|10.5|1";
                     s.CornerRadius = 0; s.BorderWidth = 1; s.BorderColor = Color.FromArgb(140, 115, 80); s.BorderAlpha = 210;
                     s.LabelFont = "Palatino Linotype|9.5|0"; s.LabelColor = Color.FromArgb(217, 207, 191);
+                    break;
+                case 7: // Veillée : tome de pierre, onglet doré, cases biseautées
+                    s.BgColor = Color.FromArgb(28, 27, 26); s.BgAlpha = 242;
+                    s.TitleColor = Color.FromArgb(200, 179, 138); s.TitleAlpha = 255;
+                    s.TitleTextColor = Color.FromArgb(200, 179, 138); s.TitleFont = "Palatino Linotype|14|0";
+                    s.CornerRadius = 0; s.BorderWidth = 2; s.BorderColor = Color.FromArgb(94, 91, 85); s.BorderAlpha = 255;
+                    s.LabelFont = "Palatino Linotype|9.5|0"; s.LabelColor = Color.FromArgb(217, 212, 201);
                     break;
                 // [presets]
                 // 1 = Néon RGB : valeurs par défaut de la classe
@@ -1685,6 +1692,7 @@ namespace Logicapp
                 case 4: return Chamfer(r, cut, false, true, false, full);  // Rallye Stellaire : haut-droite + bas-gauche
                 case 5: return RoundRect(r, cut, full);                // Friche : coins à peine arrondis
                 case 6: return RoundRect(r, cut, full);                // Sanguine : rectangle (coins réglables)
+                case 7: return RoundRect(r, cut, full);                // Veillée : rectangle (onglet de titre à part)
                 // [shape]
                 default: return RoundRect(r, cut, full);
             }
@@ -1786,6 +1794,7 @@ namespace Logicapp
             {
                 switch (Style.Theme)
                 {
+                    case 7: return ZoneApp.I.S(8);
                     // [inset]
                     default: return 0;
                 }
@@ -1801,6 +1810,7 @@ namespace Logicapp
                 {
                     case 5: return ZoneApp.I.S(8);
                     case 6: return ZoneApp.I.S(12);
+                    case 7: return ZoneApp.I.S(6);
                     // [titleextra]
                     default: return 0;
                 }
@@ -1814,6 +1824,7 @@ namespace Logicapp
             {
                 switch (Style.Theme)
                 {
+                    case 7: return ZoneApp.I.S(10);
                     // [topextra]
                     default: return 0;
                 }
@@ -1931,6 +1942,7 @@ namespace Logicapp
                 case 4: TitleRallye(g, w, open, right); break;
                 case 5: TitleFriche(g, w, open, right); break;
                 case 6: TitleSanguine(g, w, open, right); break;
+                case 7: TitleVeillee(g, w, open, right); break;
                 // [title]
             }
         }
@@ -1942,6 +1954,7 @@ namespace Logicapp
                 case 4: BackRallye(g, w, h, shape, open); break;
                 case 5: BackFriche(g, w, h, shape, open); break;
                 case 6: BackSanguine(g, w, h, shape, open); break;
+                case 7: BackVeillee(g, w, h, shape, open); break;
                 // [back]
             }
         }
@@ -1953,6 +1966,7 @@ namespace Logicapp
                 case 4: DrawSimpleItem(g, i, cell, sel, isz, lb, sb, sf, Holo, Holo); break;
                 case 5: DrawSimpleItem(g, i, cell, sel, isz, lb, sb, sf, Color.FromArgb(255, 238, 196), Style.TitleColor); break;
                 case 6: DrawSimpleItem(g, i, cell, sel, isz, lb, sb, sf, Style.TitleColor, Style.BorderColor); break;
+                case 7: ItemVeillee(g, i, cell, sel, isz, lb, sb, sf); break;
                 // [item]
             }
         }
@@ -1964,6 +1978,7 @@ namespace Logicapp
                 case 4: FrontRallye(g, w, h, cut); break;
                 case 5: FrontFriche(g, w, h, cut); break;
                 case 6: FrontSanguine(g, w, h); break;
+                case 7: FrontVeillee(g, w, h); break;
                 // [front]
             }
         }
@@ -1976,6 +1991,7 @@ namespace Logicapp
                 case 4: AnimRallye(g, w, h, open, cut); break;
                 case 5: AnimFriche(g, w, h, open, cut); break;
                 case 6: AnimSanguine(g, w, h, open, cut); break;
+                case 7: AnimVeillee(g, w, h, open, cut); break;
                 // [anim]
             }
         }
@@ -2475,6 +2491,181 @@ namespace Logicapp
             DrawMist(g, w, h, now, t, 36);
         }
 
+        // ===== Veillée : tome de pierre, onglet doré, cases biseautées, filets à volutes =====
+
+        static ImageAttributes sepiaAttr;
+
+        // Icônes un peu désaturées et virées au sépia, comme des objets anciens.
+        static ImageAttributes SepiaAttr
+        {
+            get
+            {
+                if (sepiaAttr != null) return sepiaAttr;
+                float s = 0.35f;
+                float[] lum = { 0.3086f, 0.6094f, 0.0820f };
+                float[] tint = { 1.02f * 0.88f, 0.96f * 0.88f, 0.84f * 0.88f };
+                var m = new float[5][];
+                for (int i = 0; i < 3; i++)
+                {
+                    m[i] = new float[5];
+                    for (int j = 0; j < 3; j++) m[i][j] = ((1 - s) * lum[i] + (i == j ? s : 0)) * tint[j];
+                }
+                m[3] = new float[] { 0, 0, 0, 1, 0 };
+                m[4] = new float[] { 0, 0, 0, 0, 1 };
+                var ia = new ImageAttributes();
+                ia.SetColorMatrix(new ColorMatrix(m));
+                sepiaAttr = ia;
+                return ia;
+            }
+        }
+
+        // Volute en bout de filet (dessinée dans une boîte de 26 × 10, pointe vers la gauche).
+        static void Curl(Graphics g, float x, float y, float scale, bool mirror, Color c)
+        {
+            var st = g.Save();
+            g.TranslateTransform(x, y);
+            g.ScaleTransform(mirror ? -scale : scale, scale);
+            g.TranslateTransform(0, -5);
+            using (var p = new Pen(c, 1f))
+            {
+                g.DrawLine(p, 26, 5, 12, 5);
+                g.DrawBezier(p, 12, 5, 9, 5, 8, 2, 5, 2);
+                g.DrawBezier(p, 5, 2, 2, 2, 0.5f, 4, 2, 6);
+                g.DrawBezier(p, 2, 6, 3.5f, 8, 6, 8, 6, 6);
+                g.DrawBezier(p, 6, 6, 6, 4.5f, 4, 4.5f, 4, 5);
+            }
+            using (var b = new SolidBrush(c)) g.FillEllipse(b, 8, 4, 2, 2);
+            g.Restore(st);
+        }
+
+        void FiligreeRule(Graphics g, float x0, float x1, float y, Color c)
+        {
+            float sc = ZoneApp.I.S(26) / 26f, cw = 26 * sc;
+            if (x1 - x0 < 2 * cw + 10) return;
+            Curl(g, x0, y, sc, false, c);
+            Curl(g, x1, y, sc, true, c);
+            using (var p = new Pen(Color.FromArgb(c.A * 3 / 4, c))) g.DrawLine(p, x0 + cw, y, x1 - cw, y);
+        }
+
+        void TitleVeillee(Graphics g, int w, bool open, float right)
+        {
+            var app = ZoneApp.I;
+            float top = app.S(4), ym = top + (titleH - top) / 2f;
+            if (Style.ShowCount)
+                using (var cf = new Font(titleFont.FontFamily, Math.Max(7f, titleFont.SizeInPoints * 0.72f), FontStyle.Regular, GraphicsUnit.Point))
+                {
+                    string cnt = items.Count.ToString();
+                    float cw = DrawTracked(g, cnt, cf, null, 0, 0, 0, float.MaxValue);
+                    using (var b = new SolidBrush(Color.FromArgb(143, 138, 128))) DrawTracked(g, cnt, cf, b, right - cw, ym + app.S(2), 0, right);
+                    right -= cw + app.S(10);
+                }
+            // Onglet de pierre qui dépasse du panneau
+            float tw = DrawTracked(g, ZoneName, titleFont, null, 0, 0, 0, float.MaxValue);
+            float tabW = Math.Max(app.S(60), Math.Min(tw + app.S(34), right));
+            var tab = new RectangleF(0, top, tabW, titleH - top);
+            using (var lb = new LinearGradientBrush(new RectangleF(0, top - 1, tabW, titleH - top + 2), Color.FromArgb(242, 44, 42, 39), Color.FromArgb(242, 30, 29, 27), 90f))
+                g.FillRectangle(lb, tab);
+            using (var tb = new TextureBrush(NoiseTexture, WrapMode.Tile)) g.FillRectangle(tb, tab);
+            using (var p = new Pen(Color.FromArgb(Style.BorderAlpha * 4 / 5, Style.BorderColor)))
+                g.DrawLines(p, new[] { new PointF(0.5f, titleH), new PointF(0.5f, top + 0.5f), new PointF(tabW - 0.5f, top + 0.5f), new PointF(tabW - 0.5f, titleH) });
+            using (var b = new SolidBrush(Color.FromArgb(200, 0, 0, 0))) DrawTracked(g, ZoneName, titleFont, b, app.S(15) + 1, ym + 1, 0, tabW - app.S(8));
+            using (var b = new SolidBrush(Style.TitleTextColor)) DrawTracked(g, ZoneName, titleFont, b, app.S(15), ym, 0, tabW - app.S(8));
+            // Repliée : le bord du cadre sous l'onglet
+            if (!open)
+            {
+                float bw = Math.Max(1, app.S(Style.BorderWidth));
+                using (var p = new Pen(Color.FromArgb(Style.BorderAlpha, Style.BorderColor), bw)) g.DrawLine(p, 0, titleH - bw / 2, w, titleH - bw / 2);
+            }
+        }
+
+        void BackVeillee(Graphics g, int w, int h, GraphicsPath shape, bool open)
+        {
+            if (shape == null) return;
+            var app = ZoneApp.I;
+            g.SetClip(shape);
+            FillNoise(g, shape);
+            // Ombre intérieure : le panneau paraît creusé
+            int st = Math.Max(1, app.S(3));
+            for (int k = 0; k < 5; k++)
+            {
+                float x = k * st, y = titleH + k * st, rw = w - 2 * k * st, rh = h - titleH - 2 * k * st;
+                if (rw <= 0 || rh <= 0) break;
+                using (var p = new Pen(Color.FromArgb(70 - k * 13, 0, 0, 0), st)) g.DrawRectangle(p, x, y, rw, rh);
+            }
+            if (open) FiligreeRule(g, app.S(10), w - app.S(10), titleH + app.S(9), Color.FromArgb(160, 119, 115, 107));
+            g.ResetClip();
+        }
+
+        void ItemVeillee(Graphics g, int i, Rectangle cell, bool sel, int isz, Brush lb, Brush sb, StringFormat sf)
+        {
+            var app = ZoneApp.I;
+            bool hov = i == hover;
+            var ir = IconRect(cell, isz);
+            var slot = Rectangle.Inflate(ir, IconInset, IconInset);
+            using (var bg = new LinearGradientBrush(new Rectangle(slot.X, slot.Y - 1, slot.Width, slot.Height + 2), Color.FromArgb(47, 45, 42), Color.FromArgb(20, 19, 18), 90f))
+                g.FillRectangle(bg, slot);
+            int s2 = app.S(2), s3 = Math.Max(1, app.S(3));
+            using (var p = new Pen(Color.FromArgb(150, 0, 0, 0), s3)) g.DrawRectangle(p, slot.X + s2, slot.Y + s2, slot.Width - 2 * s2, slot.Height - 2 * s2);
+            if (hov || sel)
+                using (var p = new Pen(Color.FromArgb(sel ? 90 : 60, 225, 214, 190), app.S(4))) g.DrawRectangle(p, Rectangle.Inflate(slot, s2, s2));
+            using (var p = new Pen(Color.Black)) g.DrawRectangle(p, slot.X + 1, slot.Y + 1, slot.Width - 3, slot.Height - 3);
+            Color edge = sel ? Style.TitleColor : hov ? Color.FromArgb(220, 212, 194) : Color.FromArgb(103, 100, 93);
+            using (var p = new Pen(edge)) g.DrawRectangle(p, slot.X, slot.Y, slot.Width - 1, slot.Height - 1);
+            var ic = items[i].Icon;
+            if (ic != null) g.DrawImage(ic, ir, 0, 0, ic.Width, ic.Height, GraphicsUnit.Pixel, SepiaAttr);
+            DrawItemLabel(g, items[i].Name, LabelRect(cell, ir), lb, sb, sf);
+        }
+
+        void FrontVeillee(Graphics g, int w, int h)
+        {
+            var app = ZoneApp.I;
+            if (h <= titleH + 2 || Style.BorderWidth <= 0) return;
+            float bw = app.S(Style.BorderWidth);
+            using (var p = new Pen(Color.FromArgb(Style.BorderAlpha, Style.BorderColor), bw)) g.DrawRectangle(p, bw / 2, titleH + bw / 2, w - bw, h - titleH - bw);
+            using (var p = new Pen(Color.FromArgb(220, 11, 10, 10))) g.DrawRectangle(p, bw + 0.5f, titleH + bw + 0.5f, w - 2 * bw - 1, h - titleH - 2 * bw - 1);
+        }
+
+        void AnimVeillee(Graphics g, int w, int h, bool open, float cut)
+        {
+            var app = ZoneApp.I;
+            if (!IsActive) return;
+            float t = EaseOut(HoverProgress(400));
+            float now = Clock.ElapsedMilliseconds % 1000000L;
+            long el = Clock.ElapsedMilliseconds - activeSince;
+            if (open && h > titleH)
+            {
+                // Lueur de bougie dans le coin haut-gauche
+                g.SetClip(new Rectangle(0, titleH, w, h - titleH));
+                FillGlow(g, new RectangleF(w * 0.18f - w * 0.7f, titleH - h * 0.5f, w * 1.4f, h), Color.FromArgb((int)(36 * t * CandleFlicker(now, 1900)), 255, 176, 100));
+                g.ResetClip();
+                DrawMist(g, w, h, now, t, 26);
+                // La case survolée respire doucement
+                if (hover >= 0 && hover < items.Count)
+                {
+                    var slot = Rectangle.Inflate(IconRect(CellRect(hover), app.S(Style.IconSize)), IconInset, IconInset);
+                    float pulse = 0.5f + 0.5f * (float)Math.Sin(now / 1600.0 * 2 * Math.PI);
+                    g.SetClip(ContentRect);
+                    using (var p = new Pen(Color.FromArgb((int)(70 * pulse), 235, 225, 200), Math.Max(1, app.S(2)))) g.DrawRectangle(p, Rectangle.Inflate(slot, app.S(3), app.S(3)));
+                    g.ResetClip();
+                }
+            }
+            // Éclat qui parcourt le bord du cadre, une seule fois à l'arrivée de la souris
+            float sp = el / 1400f;
+            if (sp < 1f)
+            {
+                float y = open ? titleH : titleH - app.S(2), seg = w * 0.3f, x = -seg + sp * (w + seg);
+                int a = (int)(230 * (sp > 0.85f ? (1 - sp) / 0.15f : 1f));
+                using (var lb = new LinearGradientBrush(new RectangleF(x - 1, y, seg + 2, 2), Color.Black, Color.Black, 0f))
+                {
+                    var cb = new ColorBlend(3);
+                    cb.Colors = new[] { Color.FromArgb(0, 255, 250, 235), Color.FromArgb(a, 255, 250, 235), Color.FromArgb(0, 255, 250, 235) };
+                    cb.Positions = new[] { 0f, 0.5f, 1f };
+                    lb.InterpolationColors = cb;
+                    g.FillRectangle(lb, x, y, seg, Math.Max(1, app.S(2)));
+                }
+            }
+        }
+
         // ---------- Rendu ----------
 
         public void Render()
@@ -2512,6 +2703,12 @@ namespace Logicapp
                     // Night City : rangée de titre invisible (mais cliquable) + panneau sous l'onglet
                     using (var hb = new SolidBrush(Color.FromArgb(1, 0, 0, 0))) g.FillRectangle(hb, 0, 0, w, titleH);
                     shape = h > titleH ? Chamfer(new RectangleF(0, titleH, w, h - titleH), cut, false, false, true, false) : null;
+                }
+                else if (theme == 7)
+                {
+                    // Veillée : onglet de titre posé sur le panneau (rangée de titre cliquable mais invisible)
+                    using (var hb = new SolidBrush(Color.FromArgb(1, 0, 0, 0))) g.FillRectangle(hb, 0, 0, w, titleH);
+                    shape = h > titleH ? ShapePath(new RectangleF(0, titleH, w, h - titleH), cut, true) : null;
                 }
                 else shape = ShapePath(new RectangleF(0, 0, w, h), cut, true);
                 if (shape != null)
