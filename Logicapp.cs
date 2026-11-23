@@ -409,7 +409,7 @@ namespace Logicapp
         public Color TitleTextColor = Color.FromArgb(240, 240, 255);
         public Color BorderColor = Color.White;
 
-        public static readonly string[] PresetNames = { "Classique", "Néon RGB", "Night City", "Studio", "Rallye Stellaire", "Friche", "Sanguine", "Veillée" };
+        public static readonly string[] PresetNames = { "Classique", "Néon RGB", "Night City", "Studio", "Rallye Stellaire", "Friche", "Sanguine", "Veillée", "Circuit" };
         public static int MaxTheme { get { return PresetNames.Length - 1; } }
 
         public ZoneStyle Clone() { return (ZoneStyle)MemberwiseClone(); }
@@ -476,6 +476,13 @@ namespace Logicapp
                     s.TitleTextColor = Color.FromArgb(200, 179, 138); s.TitleFont = "Palatino Linotype|14|0";
                     s.CornerRadius = 0; s.BorderWidth = 2; s.BorderColor = Color.FromArgb(94, 91, 85); s.BorderAlpha = 255;
                     s.LabelFont = "Palatino Linotype|9.5|0"; s.LabelColor = Color.FromArgb(217, 212, 201);
+                    break;
+                case 8: // Circuit : papier crème, bandes de course rétro, cartes bleu canard
+                    s.BgColor = Color.FromArgb(235, 231, 220); s.BgAlpha = 245;
+                    s.TitleColor = Color.FromArgb(212, 87, 59); s.TitleAlpha = 255;
+                    s.TitleTextColor = Color.FromArgb(30, 42, 48); s.TitleFont = "Bahnschrift|12|1";
+                    s.CornerRadius = 12; s.BorderWidth = 0; s.BorderColor = Color.White; s.BorderAlpha = 60;
+                    s.LabelFont = "Bahnschrift SemiBold|8.5|0"; s.LabelColor = Color.FromArgb(243, 241, 234);
                     break;
                 // [presets]
                 // 1 = Néon RGB : valeurs par défaut de la classe
@@ -1693,6 +1700,7 @@ namespace Logicapp
                 case 5: return RoundRect(r, cut, full);                // Friche : coins à peine arrondis
                 case 6: return RoundRect(r, cut, full);                // Sanguine : rectangle (coins réglables)
                 case 7: return RoundRect(r, cut, full);                // Veillée : rectangle (onglet de titre à part)
+                case 8: return RoundRect(r, cut, full);                // Circuit : carte arrondie
                 // [shape]
                 default: return RoundRect(r, cut, full);
             }
@@ -1795,6 +1803,7 @@ namespace Logicapp
                 switch (Style.Theme)
                 {
                     case 7: return ZoneApp.I.S(8);
+                    case 8: return ZoneApp.I.S(8);
                     // [inset]
                     default: return 0;
                 }
@@ -1811,6 +1820,7 @@ namespace Logicapp
                     case 5: return ZoneApp.I.S(8);
                     case 6: return ZoneApp.I.S(12);
                     case 7: return ZoneApp.I.S(6);
+                    case 8: return ZoneApp.I.S(8);
                     // [titleextra]
                     default: return 0;
                 }
@@ -1943,6 +1953,7 @@ namespace Logicapp
                 case 5: TitleFriche(g, w, open, right); break;
                 case 6: TitleSanguine(g, w, open, right); break;
                 case 7: TitleVeillee(g, w, open, right); break;
+                case 8: TitleCircuit(g, w, open, right); break;
                 // [title]
             }
         }
@@ -1955,6 +1966,7 @@ namespace Logicapp
                 case 5: BackFriche(g, w, h, shape, open); break;
                 case 6: BackSanguine(g, w, h, shape, open); break;
                 case 7: BackVeillee(g, w, h, shape, open); break;
+                case 8: BackCircuit(g, w, h, shape, open); break;
                 // [back]
             }
         }
@@ -1967,6 +1979,7 @@ namespace Logicapp
                 case 5: DrawSimpleItem(g, i, cell, sel, isz, lb, sb, sf, Color.FromArgb(255, 238, 196), Style.TitleColor); break;
                 case 6: DrawSimpleItem(g, i, cell, sel, isz, lb, sb, sf, Style.TitleColor, Style.BorderColor); break;
                 case 7: ItemVeillee(g, i, cell, sel, isz, lb, sb, sf); break;
+                case 8: ItemCircuit(g, i, cell, sel, isz, lb, sb, sf); break;
                 // [item]
             }
         }
@@ -1979,6 +1992,7 @@ namespace Logicapp
                 case 5: FrontFriche(g, w, h, cut); break;
                 case 6: FrontSanguine(g, w, h); break;
                 case 7: FrontVeillee(g, w, h); break;
+                case 8: FrontCircuit(g, w, h, cut); break;
                 // [front]
             }
         }
@@ -1992,6 +2006,7 @@ namespace Logicapp
                 case 5: AnimFriche(g, w, h, open, cut); break;
                 case 6: AnimSanguine(g, w, h, open, cut); break;
                 case 7: AnimVeillee(g, w, h, open, cut); break;
+                case 8: AnimCircuit(g, w, h, open, cut); break;
                 // [anim]
             }
         }
@@ -2663,6 +2678,136 @@ namespace Logicapp
                     lb.InterpolationColors = cb;
                     g.FillRectangle(lb, x, y, seg, Math.Max(1, app.S(2)));
                 }
+            }
+        }
+
+        // ===== Circuit : papier crème, « /TITRE », bandes de course rétro, cartes bleu canard, pilule sombre =====
+
+        static readonly Color RaceNavy = Color.FromArgb(34, 52, 62), RaceTeal = Color.FromArgb(52, 82, 95),
+                              RaceSky = Color.FromArgb(169, 195, 198), RaceOrange = Color.FromArgb(228, 138, 46);
+
+        void TitleCircuit(Graphics g, int w, bool open, float right)
+        {
+            var app = ZoneApp.I;
+            float ym = titleH / 2f;
+            float track = Math.Max(1f, titleFont.Size * 0.12f) * app.Scale;
+            Color cream = Color.FromArgb(241, 239, 232);
+            // Compteur dans une pilule sombre, avec un losange
+            if (Style.ShowCount)
+                using (var cf = new Font(titleFont.FontFamily, Math.Max(7f, titleFont.SizeInPoints * 0.62f), FontStyle.Bold, GraphicsUnit.Point))
+                {
+                    string cnt = items.Count.ToString("00");
+                    float cw = DrawTracked(g, cnt, cf, null, 0, ym, 0, float.MaxValue);
+                    float ph = Math.Max(app.S(16), titleH * 0.48f), pw = cw + app.S(30);
+                    var pr = new RectangleF(right - pw, ym - ph / 2, pw, ph);
+                    using (var pp = RoundRect(pr, ph / 2, true))
+                    using (var b = new SolidBrush(RaceNavy)) g.FillPath(b, pp);
+                    float d = ph * 0.2f, cx = pr.X + app.S(12);
+                    using (var p = new Pen(cream, Math.Max(1.5f, app.S(2))))
+                        g.DrawPolygon(p, new[] { new PointF(cx, ym - d), new PointF(cx + d, ym), new PointF(cx, ym + d), new PointF(cx - d, ym) });
+                    using (var b = new SolidBrush(cream)) DrawTracked(g, cnt, cf, b, pr.X + app.S(20), ym, 0, pr.Right);
+                    right = pr.X - app.S(8);
+                }
+            // « / » rouge puis le nom en capitales larges
+            float x = app.S(14);
+            Color red = Color.FromArgb(Style.TitleAlpha, Style.TitleColor);
+            using (var b = new SolidBrush(red)) x += DrawTracked(g, "/", titleFont, b, x, ym, 0, right) + track;
+            using (var b = new SolidBrush(Style.TitleTextColor)) x += DrawTracked(g, ZoneName.ToUpperInvariant(), titleFont, b, x, ym, track, right - app.S(44));
+            // Petit badge rayé
+            float bx = x + app.S(10), bwid = app.S(30), bh = app.S(12);
+            if (bx + bwid <= right)
+            {
+                using (var p = new Pen(red, Math.Max(1.5f, app.S(2)))) g.DrawRectangle(p, bx, ym - bh / 2, bwid, bh);
+                using (var b = new SolidBrush(red))
+                    for (int k = 0; k < 3; k++) g.FillRectangle(b, bx + app.S(5) + k * app.S(7), ym - app.S(2), app.S(3), app.S(4));
+            }
+        }
+
+        void BackCircuit(Graphics g, int w, int h, GraphicsPath shape, bool open)
+        {
+            if (shape == null) return;
+            var app = ZoneApp.I;
+            g.SetClip(shape);
+            FillNoise(g, shape);
+            if (!open) { g.ResetClip(); return; } // repliée : la pilule et la roue restent lisibles
+            // Bandes de course qui traversent le coin bas-droit
+            var st = g.Save();
+            g.TranslateTransform(w - app.S(5), Math.Max(h - app.S(70), titleH + app.S(30)));
+            g.RotateTransform(36f);
+            float L = app.S(600);
+            int[,] bands = { { -75, -51 }, { -43, -23 }, { -15, 7 }, { 17, 25 } };
+            Color[] cols = { RaceTeal, RaceSky, Style.TitleColor, RaceOrange };
+            for (int k = 0; k < 4; k++)
+                using (var b = new SolidBrush(Color.FromArgb(240, cols[k])))
+                    g.FillRectangle(b, app.S(bands[k, 0]), -L, app.S(bands[k, 1] - bands[k, 0]), 2 * L);
+            g.Restore(st);
+            g.ResetClip();
+        }
+
+        void ItemCircuit(Graphics g, int i, Rectangle cell, bool sel, int isz, Brush lb, Brush sb, StringFormat sf)
+        {
+            var app = ZoneApp.I;
+            bool hov = i == hover;
+            int lift = hov ? app.S(2) : 0;
+            var card = new RectangleF(cell.X + app.S(4), cell.Y + app.S(4) - lift, cell.Width - app.S(8), cell.Height - app.S(8));
+            float rad = app.S(9);
+            // La carte survolée se soulève (ombre portée) et prend un contour blanc et un point rouge
+            if (hov)
+                using (var shp = RoundRect(new RectangleF(card.X, card.Y + app.S(4), card.Width, card.Height), rad, true))
+                using (var b = new SolidBrush(Color.FromArgb(60, 0, 0, 0))) g.FillPath(b, shp);
+            using (var cp = RoundRect(card, rad, true))
+            {
+                using (var bg = new LinearGradientBrush(new RectangleF(card.X, card.Y - 1, card.Width, card.Height + 2), Color.FromArgb(58, 90, 104), RaceTeal, 90f))
+                    g.FillPath(bg, cp);
+                using (var p = new Pen(Color.FromArgb(36, 255, 255, 255))) g.DrawPath(p, cp);
+            }
+            if (hov || sel)
+                using (var p = new Pen(sel ? Color.FromArgb(Style.TitleAlpha, Style.TitleColor) : Color.White, Math.Max(1.5f, app.S(2))))
+                using (var op = RoundRect(RectangleF.Inflate(card, app.S(1), app.S(1)), rad + app.S(1), true))
+                    g.DrawPath(p, op);
+            if (hov)
+                using (var b = new SolidBrush(Style.TitleColor))
+                {
+                    float d = app.S(6);
+                    g.FillEllipse(b, card.Right - app.S(6) - d, card.Y + app.S(6), d, d);
+                }
+            var ir = IconRect(cell, isz);
+            ir.Offset(0, -lift);
+            if (items[i].Icon != null) g.DrawImage(items[i].Icon, ir);
+            DrawItemLabel(g, items[i].Name, LabelRect(cell, ir), lb, sb, sf);
+        }
+
+        void FrontCircuit(Graphics g, int w, int h, float cut)
+        {
+            if (Style.BorderWidth <= 0) return;
+            float bw = ZoneApp.I.S(Style.BorderWidth);
+            using (var pen = new Pen(Color.FromArgb(Style.BorderAlpha, Style.BorderColor), bw))
+            using (var bp = ShapePath(new RectangleF(bw / 2, bw / 2, w - bw, h - bw), Math.Max(0, cut - bw / 2), true))
+                g.DrawPath(pen, bp);
+        }
+
+        void AnimCircuit(Graphics g, int w, int h, bool open, float cut)
+        {
+            var app = ZoneApp.I;
+            if (!IsActive) return;
+            float t = EaseOut(HoverProgress(300));
+            DrawSpeedStreaks(g, w, Color.FromArgb(150, Style.TitleColor), 1100);
+            if (!open || h <= titleH) return;
+            // Quelques grains de sable emportés par le vent
+            float now = Clock.ElapsedMilliseconds % 1000000L;
+            using (var shape = ShapePath(new RectangleF(0, 0, w, h), cut, true))
+            {
+                g.SetClip(shape);
+                float gw = Math.Max(2f, app.S(3)), gh = Math.Max(1f, app.S(3) / 2f);
+                for (int k = 0; k < 10; k++)
+                {
+                    float dur = 1800 + 1400 * Hash(k, 21), p = ((now + Hash(k, 22) * 3000) % dur) / dur;
+                    float x = w * (0.6f + 0.45f * Hash(k, 23)) - app.S(220) * p;
+                    float y = titleH + (h - titleH) * (0.15f + 0.8f * Hash(k, 24)) + app.S(18) * p;
+                    float a = p < 0.15f ? p / 0.15f : 1f - (p - 0.15f) / 0.85f;
+                    using (var b = new SolidBrush(Color.FromArgb((int)(150 * a * t), 160, 100, 50))) g.FillRectangle(b, x, y, gw, gh);
+                }
+                g.ResetClip();
             }
         }
 
