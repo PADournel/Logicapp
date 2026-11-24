@@ -20,46 +20,48 @@ function New-IconPng([int]$s) {
     $g.SmoothingMode = 'AntiAlias'
     $g.PixelOffsetMode = 'HighQuality'
     $g.Clear([System.Drawing.Color]::Transparent)
-    $u = $s / 16.0
+    # Dessin « Orbite » sur une grille 64 x 64 (reprend les orbites du preset Exil)
+    $u = $s / 64.0
     $C = [System.Drawing.Color]
+    $P = [System.Drawing.PointF]
     $small = $s -le 24
+    $copperA = $C::FromArgb(255, 240, 178, 122)
+    $copperB = $C::FromArgb(255, 184, 103, 58)
+    $coal = $C::FromArgb(255, 27, 29, 34)
 
-    # Fond : carré arrondi en dégradé indigo -> violet
-    $bg = New-RoundRect (0.4 * $u) (0.4 * $u) (15.2 * $u) (15.2 * $u) (3.6 * $u)
-    $grad = New-Object System.Drawing.Drawing2D.LinearGradientBrush (New-Object System.Drawing.PointF 0, 0), (New-Object System.Drawing.PointF $s, $s), $C::FromArgb(255, 99, 102, 241), $C::FromArgb(255, 192, 77, 214)
-    $g.FillPath($grad, $bg)
-    # Reflet léger en haut
-    $g.SetClip($bg)
-    $shine = New-Object System.Drawing.Drawing2D.LinearGradientBrush (New-Object System.Drawing.PointF 0, 0), (New-Object System.Drawing.PointF 0, ($s * 0.55)), $C::FromArgb(60, 255, 255, 255), $C::FromArgb(0, 255, 255, 255)
-    $g.FillRectangle($shine, 0, 0, $s, $s * 0.55)
-    $g.ResetClip()
+    # Fond : disque charbon
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush $coal), (2 * $u), (2 * $u), (60 * $u), (60 * $u))
 
-    # La « zone » : carte blanche avec ombre, barre de titre et tuiles
-    $cx = 2.7 * $u; $cy = 3.0 * $u; $cw = 10.6 * $u; $ch = 10.2 * $u; $cr = 1.7 * $u
-    $shadow = New-RoundRect $cx ($cy + 0.5 * $u) $cw $ch $cr
-    $g.FillPath((New-Object System.Drawing.SolidBrush ($C::FromArgb(70, 40, 20, 90))), $shadow)
-    $card = New-RoundRect $cx $cy $cw $ch $cr
-    $g.FillPath((New-Object System.Drawing.SolidBrush ($C::FromArgb(250, 255, 255, 255))), $card)
-    $g.SetClip($card)
-    $g.FillRectangle((New-Object System.Drawing.SolidBrush ($C::FromArgb(255, 67, 56, 202))), $cx, $cy, $cw, 2.4 * $u)
-    $g.ResetClip()
+    # Orbites cuivrées (une seule, plus épaisse, aux petites tailles)
+    $orbits = @(@(-25, 204), @(35, 115))
+    if ($small) { $orbits[0][1] = 230 }
+    $nOrbits = if ($small) { 1 } else { 2 }
+    $penW = [math]::Max(1.6 * $u, 1.1)
+    for ($k = 0; $k -lt $nOrbits; $k++) {
+        $o = $orbits[$k]
+        $ob = New-Object System.Drawing.Drawing2D.LinearGradientBrush (New-Object $P (8 * $u), (8 * $u)), (New-Object $P (56 * $u), (56 * $u)), $C::FromArgb($o[1], $copperA), $C::FromArgb($o[1], $copperB)
+        $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+        $path.AddEllipse((8 * $u), (22 * $u), (48 * $u), (20 * $u))
+        $m = New-Object System.Drawing.Drawing2D.Matrix
+        $m.RotateAt($o[0], (New-Object $P (32 * $u), (32 * $u)))
+        $path.Transform($m)
+        $g.DrawPath((New-Object System.Drawing.Pen $ob, $penW), $path)
+    }
+
+    # La zone : carré arrondi cuivré au centre, avec 4 icônes (la dernière estompée)
+    $zb = New-Object System.Drawing.Drawing2D.LinearGradientBrush (New-Object $P (22 * $u), (22 * $u)), (New-Object $P (42 * $u), (42 * $u)), $copperA, $copperB
+    $g.FillPath($zb, (New-RoundRect (22 * $u) (22 * $u) (20 * $u) (20 * $u) (5 * $u)))
     if (-not $small) {
-        # Chevron (zone repliable) et nom stylisé dans la barre de titre
-        $tri = [System.Drawing.PointF[]]@(
-            (New-Object System.Drawing.PointF ($cx + 1.0 * $u), ($cy + 0.85 * $u)),
-            (New-Object System.Drawing.PointF ($cx + 2.2 * $u), ($cy + 0.85 * $u)),
-            (New-Object System.Drawing.PointF ($cx + 1.6 * $u), ($cy + 1.6 * $u)))
-        $g.FillPolygon((New-Object System.Drawing.SolidBrush ($C::White)), $tri)
-        $g.FillPath((New-Object System.Drawing.SolidBrush ($C::FromArgb(200, 255, 255, 255))), (New-RoundRect ($cx + 2.9 * $u) ($cy + 0.95 * $u) (4.2 * $u) (0.6 * $u) (0.3 * $u)))
+        $cells = @(@(27, 27, 255), @(33, 27, 255), @(27, 33, 255), @(33, 33, 102))
+        foreach ($cell in $cells) {
+            $g.FillPath((New-Object System.Drawing.SolidBrush ($C::FromArgb($cell[2], $coal))), (New-RoundRect ($cell[0] * $u) ($cell[1] * $u) (4 * $u) (4 * $u) (1 * $u)))
+        }
     }
-    # Tuiles (icônes rangées) : 2 x 2, couleurs vives
-    $tiles = @($C::FromArgb(255, 255, 138, 101), $C::FromArgb(255, 56, 189, 248), $C::FromArgb(255, 74, 222, 128), $C::FromArgb(255, 250, 204, 21))
-    $tw = 3.6 * $u; $th = 2.9 * $u; $gap = 0.9 * $u
-    $tx0 = $cx + ($cw - 2 * $tw - $gap) / 2; $ty0 = $cy + 3.25 * $u
-    for ($i = 0; $i -lt 4; $i++) {
-        $tx = $tx0 + ($i % 2) * ($tw + $gap); $ty = $ty0 + [math]::Floor($i / 2) * ($th + $gap * 0.8)
-        $g.FillPath((New-Object System.Drawing.SolidBrush $tiles[$i]), (New-RoundRect $tx $ty $tw $th (0.7 * $u)))
-    }
+
+    # Satellites sur les orbites
+    $r1 = [math]::Max(3 * $u, 1.1); $r2 = [math]::Max(2.2 * $u, 0.9)
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush $copperA), (53 * $u - $r1), (22 * $u - $r1), (2 * $r1), (2 * $r1))
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush ($C::White)), (13 * $u - $r2), (43 * $u - $r2), (2 * $r2), (2 * $r2))
     $g.Dispose()
     $ms = New-Object System.IO.MemoryStream
     if ($s -ge 256) {
