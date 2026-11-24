@@ -955,15 +955,49 @@ namespace Logicapp
             }
         }
 
+        // Démarrage par un raccourci dans le dossier « Démarrage » : sur certains PC, Windows saute l'entrée « Run »
+        // de Logicapp sans rien noter dans les journaux, alors que les raccourcis de ce dossier sont bien lancés.
+        const string ApprovedFolderKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder";
+
+        static string StartupShortcut
+        {
+            get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), AppName + ".lnk"); }
+        }
+
         static bool IsStartupEnabled()
         {
-            using (var k = Registry.CurrentUser.OpenSubKey(RunKey))
+            if (File.Exists(StartupShortcut))
+            {
+                using (var a = Registry.CurrentUser.OpenSubKey(ApprovedFolderKey))
+                {
+                    var b = a == null ? null : a.GetValue(AppName + ".lnk") as byte[];
+                    return b == null || b.Length == 0 || (b[0] & 1) == 0;
+                }
+            }
+            using (var k = Registry.CurrentUser.OpenSubKey(RunKey)) // ancienne méthode : migrée par SetStartup(true)
                 if (k == null || k.GetValue(AppName) == null) return false;
             return !IsDisabledInTaskManager();
         }
 
-        // Windows lance les entrées « Run » avant que les lecteurs cloud ou réseau (kDrive, OneDrive, NAS…) soient montés :
-        // un exe posé sur un tel lecteur est ignoré sans message. On démarre donc une copie gardée sur le disque local.
+        static void CreateShortcut(string lnk, string target)
+        {
+            Type t = Type.GetTypeFromProgID("WScript.Shell");
+            object sh = Activator.CreateInstance(t);
+            try
+            {
+                object sc = t.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, sh, new object[] { lnk });
+                Type st = sc.GetType();
+                st.InvokeMember("TargetPath", BindingFlags.SetProperty, null, sc, new object[] { target });
+                st.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, sc, new object[] { Path.GetDirectoryName(target) });
+                st.InvokeMember("Description", BindingFlags.SetProperty, null, sc, new object[] { AppName });
+                st.InvokeMember("Save", BindingFlags.InvokeMethod, null, sc, null);
+                Marshal.FinalReleaseComObject(sc);
+            }
+            finally { Marshal.FinalReleaseComObject(sh); }
+        }
+
+        // Le démarrage lance une copie gardée sur le disque local, mise à jour à chaque lancement depuis un autre dossier :
+        // il ne dépend ainsi ni d'un lecteur cloud ou réseau, ni du dossier où l'app est compilée.
         static string LocalStartupCopy()
         {
             string exe = Application.ExecutablePath;
@@ -989,20 +1023,29 @@ namespace Logicapp
 
         static void SetStartup(bool on)
         {
+            // L'ancienne entrée « Run » est toujours retirée, pour ne pas apparaître deux fois dans le Gestionnaire des tâches.
             try
             {
-                using (var k = Registry.CurrentUser.CreateSubKey(RunKey))
+                using (var k = Registry.CurrentUser.OpenSubKey(RunKey, true)) if (k != null) k.DeleteValue(AppName, false);
+                using (var a = Registry.CurrentUser.OpenSubKey(ApprovedKey, true)) if (a != null) a.DeleteValue(AppName, false);
+            }
+            catch (Exception ex) { Program.LogError(ex); }
+            try
+            {
+                if (on)
                 {
-                    if (on) k.SetValue(AppName, "\"" + LocalStartupCopy() + "\"");
-                    else k.DeleteValue(AppName, false);
+                    CreateShortcut(StartupShortcut, LocalStartupCopy());
+                    using (var a = Registry.CurrentUser.CreateSubKey(ApprovedFolderKey))
+                        a.SetValue(AppName + ".lnk", new byte[] { 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, RegistryValueKind.Binary);
                 }
-                using (var a = Registry.CurrentUser.CreateSubKey(ApprovedKey))
+                else
                 {
-                    if (on) a.SetValue(AppName, new byte[] { 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, RegistryValueKind.Binary);
-                    else a.DeleteValue(AppName, false);
+                    if (File.Exists(StartupShortcut)) File.Delete(StartupShortcut);
+                    using (var a = Registry.CurrentUser.OpenSubKey(ApprovedFolderKey, true))
+                        if (a != null) a.DeleteValue(AppName + ".lnk", false);
                 }
             }
-            catch { }
+            catch (Exception ex) { Program.LogError(ex); }
         }
 
         public static void OpenExplorer(string path)
