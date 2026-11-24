@@ -53,8 +53,8 @@ function New-IconPng([int]$s) {
     $g.FillPath($zb, (New-RoundRect (22 * $u) (22 * $u) (20 * $u) (20 * $u) (5 * $u)))
     if (-not $small) {
         $cells = @(@(27, 27, 255), @(33, 27, 255), @(27, 33, 255), @(33, 33, 102))
-        foreach ($c in $cells) {
-            $g.FillPath((New-Object System.Drawing.SolidBrush ($C::FromArgb($c[2], $coal))), (New-RoundRect ($c[0] * $u) ($c[1] * $u) (4 * $u) (4 * $u) (1 * $u)))
+        foreach ($cell in $cells) {
+            $g.FillPath((New-Object System.Drawing.SolidBrush ($C::FromArgb($cell[2], $coal))), (New-RoundRect ($cell[0] * $u) ($cell[1] * $u) (4 * $u) (4 * $u) (1 * $u)))
         }
     }
 
